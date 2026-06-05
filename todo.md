@@ -12,7 +12,7 @@ This file is for Claude/human coordination after the handoff. Keep it current wh
 
 ## Active Work
 
-- None recorded at handoff.
+- **Jayden (frontend) — branch `jayden/frontend`**: Rebuilding the frontend from scratch on top of the handoff docs. Done so far: Vite + React + TS + Tailwind + shadcn/ui scaffold, and Milestone 2 "data core" — `src/types/chat.ts` (`ChatNode`, `ChatSessionState`) and `src/store/chatStore.ts` (Zustand persisted to `branchchat-storage`, one chat with a root system node, `selectNode` + placeholder `addNode`). No canvas/UI or AI calls yet. Next: canvas + node UI milestones. Owning `src/store/chatStore.ts` and `src/types/chat.ts` for now — coordinate here before touching them.
 
 ## Priority Backlog
 
