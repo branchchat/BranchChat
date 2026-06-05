@@ -19,7 +19,66 @@ This file is for Claude/human coordination after the handoff. Keep it current wh
   - PostHog analytics wrapper (no-op until keyed), `/health` + `/health/ready`, Dockerfile, `docker-compose.yml` (local Postgres), Alembic (async), `.env.backend.example`, `docs/backend-security.md`, tests (17 passing: health/headers, prompt truncation, identity, guardrails, chat contract).
   - **Verified:** syntax, import, all 17 tests. **Not yet verified live:** migration + RLS against Postgres (needs Docker Desktop running) and a real Gemini call (needs `GEMINI_API_KEY`).
   - **Auth milestone done + verified live** (commit pending): `app/routers/auth.py` — `POST /api/auth/{signup,login,logout,request-password-reset,reset-password,verify-email,resend-verification}`, `GET /api/auth/{me,usage}`. argon2id hashing, JWT in HttpOnly cookie, 5×-failure account lockout, single-use SHA-256-hashed email tokens, enumeration-safe responses (uniform 401 / generic signup+reset), timing-equalised login. PostHog events: user_signed_up (+ anon→user alias), user_logged_in, email_verified. Verified end-to-end against Docker Postgres + real Gemini: migration applied, **RLS ownership isolation proven**, real chat call returns over HTTP, 30 tests passing (incl. 12 auth edge-case + 1 quota, DB-backed). Fixed a `usage_counters.day` date-binding bug found only by the live run.
-  - **@partner (Jayden):** contract matches your `src/lib/api.ts` exactly — don't change it. I need your exact frontend origins for `CORS_ORIGINS`. Base URL is `http://localhost:8000`. Note: **signup does NOT auto-login** (enumeration-safe) — after signup, call `POST /api/auth/login` with the same creds. Auth cookie is `branchchat_token` (HttpOnly); send `credentials: 'include'` (you already do). Next: share snapshots, then analytics/retention. Owning `app/`, `alembic/`, `docker-compose.yml`, `Dockerfile`, root `requirements*.txt` — coordinate here before touching them.
+  - **@partner (Jayden):** contract matches your `src/lib/api.ts` exactly — don't change it. Next: share snapshots, then analytics/retention. Owning `app/`, `alembic/`, `docker-compose.yml`, `Dockerfile`, root `requirements*.txt` — coordinate here before touching them. Full integration details below 👇
+
+## Backend ↔ Frontend Integration Notes (from Roshaan / backend → Jayden + frontend Claude)
+
+Everything the frontend needs to integrate. The backend lives in `app/` on branch
+`backend` (pushed; PR `backend → main` open). Stateless: the browser stays the
+source of truth for the tree.
+
+### Run the frontend against the live backend
+- Set frontend env: `VITE_API_BASE=http://localhost:8000`, `VITE_PROVIDER=gemini`.
+  Leave `VITE_API_BASE` empty to keep using your local stub.
+- Backend needs Docker Postgres up + a `GEMINI_API_KEY` (both already configured
+  locally). Start it: `uvicorn app.main:app --host 127.0.0.1 --port 8000`.
+- Verified end-to-end: sending a message from the canvas returns a real Gemini
+  reply through the backend (quota + RLS + fallback all live).
+
+### Chat contract (unchanged — do NOT edit `api.ts`)
+- `POST /api/chat/gemini` (and `/ollama`), `credentials: 'include'`.
+- Request `{ node_id, message, history, linked_context, coding_mode, personalization? }`
+  → Response `{ node_id, reply }`. `node_id` is an echoed correlation id.
+- Errors are `{ "detail": "<human message>" }` with status:
+  - **429** quota/rate-limit → show `detail` directly (it's user-facing copy).
+  - **502** provider down (after Gemini fallback), **503** provider not configured,
+    **422** invalid input. Your `ChatApiError` already surfaces `detail`.
+- The backend re-applies the SAME truncation caps server-side (20/24k standard,
+  28/48k coding) and caps `linked_context` to 4 blocks — defence in depth, no
+  behaviour change for you.
+
+### Cookies / auth (what the browser will carry)
+- Two HttpOnly cookies set by the backend: `branchchat_anon_id` (anonymous quota,
+  set on first chat) and `branchchat_token` (JWT session, set on login).
+- Keep `credentials: 'include'` on every request (you already do).
+
+### Auth endpoints (for when you build the auth screens)
+- `POST /api/auth/signup` `{email, password(≥12)}` → 201 generic message.
+  **Does NOT log you in** (deliberate, enumeration-safe). After signup, call login.
+- `POST /api/auth/login` `{email, password}` → 200 `UserOut {id,email,email_verified,created_at}`, sets session cookie. Wrong creds → uniform **401 "Invalid email or password."** (never reveals if the account exists).
+- `POST /api/auth/logout` → clears cookie.
+- `GET /api/auth/me` → `UserOut` or **401** (use to hydrate `authStore`).
+- `GET /api/auth/usage` → `{authenticated, kind, used, limit, remaining}` — drive the
+  usage meter / the "Scope" budget display with this.
+- `POST /api/auth/request-password-reset` `{email}` → always 200 generic.
+- `POST /api/auth/reset-password` `{token, password}` and
+  `POST /api/auth/verify-email` `{token}` → you need routes `/reset-password` and
+  `/verify-email` that read `?token=...` from the URL and POST it. Email links point
+  at `APP_BASE_URL` (set to your frontend origin).
+- `POST /api/auth/resend-verification` (requires login).
+- Quotas: anon **10/day**, authenticated **50/day**, coding-mode **10/day** (separate).
+
+### I need ONE thing from you
+- **Your exact frontend origins** for the CORS allow-list (`CORS_ORIGINS`). Right now
+  it allows `http://localhost:5173` and `http://127.0.0.1:5173`. Tell me your dev port
+  if different, and your deployed Pages URL when you have it. (Credentialed requests
+  require explicit origins — no `*`.) In prod, cookies also flip to
+  `SameSite=None; Secure` for cross-site — I handle that server-side.
+
+### Optional, your call
+- The target design's "Scope ~4,440 / 24,000" meter: backend can return token/usage
+  info in the chat response if you'd rather show exact numbers than a char estimate.
+  Say the word and I'll add it to the response (additive, non-breaking).
 
 ## Priority Backlog
 
