@@ -58,6 +58,7 @@ export interface ChatNode {
   // Per-node mode + transient flags.
   codingMode?: boolean;
   isLoading?: boolean;
+  isError?: boolean; // assistant reply failed (e.g. backend unreachable / 429)
 
   // Canvas layout (assigned by the layout pass / React Flow).
   position?: { x: number; y: number };

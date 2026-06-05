@@ -40,6 +40,7 @@ function ChatNodeComponent({ data, selected }: NodeProps<ChatFlowNode>) {
       style={{ width: NODE_WIDTH }}
       className={cn(
         "gap-2 py-3 text-left transition-shadow",
+        node.isError && "border-destructive/50 bg-destructive/5",
         selected && "ring-2 ring-ring ring-offset-2 ring-offset-background",
       )}
     >
@@ -61,7 +62,12 @@ function ChatNodeComponent({ data, selected }: NodeProps<ChatFlowNode>) {
         {node.isLoading ? (
           <p className="text-sm text-muted-foreground italic">Thinking…</p>
         ) : (
-          <p className="line-clamp-6 text-sm whitespace-pre-wrap text-foreground">
+          <p
+            className={cn(
+              "line-clamp-6 text-sm whitespace-pre-wrap text-foreground",
+              node.isError && "text-destructive",
+            )}
+          >
             {node.content || (
               <span className="text-muted-foreground italic">Empty</span>
             )}

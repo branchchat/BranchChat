@@ -12,6 +12,11 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
+import {
+  ChatApiError,
+  isBackendConfigured,
+  requestChatReply,
+} from "@/lib/api";
 import type {
   ChatNode,
   ChatSessionState,
@@ -249,6 +254,9 @@ export interface ChatStoreState {
     opts?: { branchLabel?: string; focusText?: string },
   ) => ExchangeResult | null;
 
+  // Re-request the reply for an existing (e.g. errored) assistant node.
+  retryAssistant: (assistantId: string) => void;
+
   // Low-level helper retained from Milestone 2 (used by tests/console).
   addNode: (
     parentId: string,
@@ -259,38 +267,84 @@ export interface ChatStoreState {
 export const useChatStore = create<ChatStoreState>()(
   persist(
     (set, get) => {
-      // After the simulated delay, fill the assistant node with a stub reply.
-      const scheduleStubbedReply = (
+      // Write the final reply (or an error message) into the assistant node.
+      const fillAssistant = (
         chatId: string,
         assistantId: string,
-        userMessage: string,
-      ) => {
-        setTimeout(() => {
-          set((state) => {
-            const chat = state.chats[chatId];
-            const node = chat?.nodes[assistantId];
-            if (!chat || !node) return {};
-            const history = buildHistoryForNode(
-              chat.nodes,
-              node.parentId,
-              state.codingMode,
-            );
-            const reply = stubAssistantReply(userMessage, history);
-            return {
-              chats: {
-                ...state.chats,
-                [chat.id]: {
-                  ...chat,
-                  nodes: {
-                    ...chat.nodes,
-                    [assistantId]: { ...node, content: reply, isLoading: false },
+        content: string,
+        isError: boolean,
+      ) =>
+        set((state) => {
+          const chat = state.chats[chatId];
+          const node = chat?.nodes[assistantId];
+          if (!chat || !node) return {};
+          return {
+            chats: {
+              ...state.chats,
+              [chat.id]: {
+                ...chat,
+                nodes: {
+                  ...chat.nodes,
+                  [assistantId]: {
+                    ...node,
+                    content,
+                    isLoading: false,
+                    isError: isError || undefined,
                   },
-                  updatedAt: Date.now(),
                 },
+                updatedAt: Date.now(),
               },
-            };
-          });
-        }, STUB_REPLY_DELAY_MS);
+            },
+          };
+        });
+
+      // Request the reply for an existing loading assistant node whose parent
+      // is the user message. History is the path up to (not including) that
+      // user message; the message is sent separately, per README. Falls back
+      // to a stub when no backend is configured so the app stays usable
+      // local-first.
+      const requestAssistantReply = async (
+        chatId: string,
+        userId: string,
+        assistantId: string,
+      ) => {
+        const state = get();
+        const chat = state.chats[chatId];
+        const userNode = chat?.nodes[userId];
+        if (!chat || !userNode) return;
+
+        const codingMode = state.codingMode;
+        const message = userNode.content;
+        const history = buildHistoryForNode(
+          chat.nodes,
+          userNode.parentId,
+          codingMode,
+        );
+
+        try {
+          let reply: string;
+          if (isBackendConfigured()) {
+            reply = await requestChatReply({
+              node_id: assistantId,
+              message,
+              history,
+              linked_context: [],
+              coding_mode: codingMode,
+            });
+          } else {
+            await new Promise((resolve) =>
+              setTimeout(resolve, STUB_REPLY_DELAY_MS),
+            );
+            reply = stubAssistantReply(message, history);
+          }
+          fillAssistant(chatId, assistantId, reply || "(empty reply)", false);
+        } catch (err) {
+          const detail =
+            err instanceof ChatApiError
+              ? err.message
+              : "Something went wrong requesting the reply.";
+          fillAssistant(chatId, assistantId, `⚠️ ${detail}`, true);
+        }
       };
 
       const initialChat = createInitialChat();
@@ -339,7 +393,11 @@ export const useChatStore = create<ChatStoreState>()(
 
           const settled = result as ExchangeResult | null;
           if (settled) {
-            scheduleStubbedReply(get().activeChatId, settled.assistantId, text);
+            void requestAssistantReply(
+              get().activeChatId,
+              settled.userId,
+              settled.assistantId,
+            );
           }
           return settled;
         },
@@ -387,9 +445,49 @@ export const useChatStore = create<ChatStoreState>()(
 
           const settled = result as ExchangeResult | null;
           if (settled) {
-            scheduleStubbedReply(get().activeChatId, settled.assistantId, text);
+            void requestAssistantReply(
+              get().activeChatId,
+              settled.userId,
+              settled.assistantId,
+            );
           }
           return settled;
+        },
+
+        retryAssistant: (assistantId) => {
+          const state = get();
+          const chat = state.chats[state.activeChatId];
+          const node = chat?.nodes[assistantId];
+          if (!chat || !node || node.role !== "assistant" || !node.parentId) {
+            return;
+          }
+          const userId = node.parentId;
+
+          set((s) => {
+            const c = s.chats[s.activeChatId];
+            const n = c?.nodes[assistantId];
+            if (!c || !n) return {};
+            return {
+              chats: {
+                ...s.chats,
+                [c.id]: {
+                  ...c,
+                  nodes: {
+                    ...c.nodes,
+                    [assistantId]: {
+                      ...n,
+                      content: "",
+                      isLoading: true,
+                      isError: undefined,
+                    },
+                  },
+                  updatedAt: Date.now(),
+                },
+              },
+            };
+          });
+
+          void requestAssistantReply(chat.id, userId, assistantId);
         },
 
         addNode: (parentId, init) => {
