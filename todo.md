@@ -12,7 +12,13 @@ This file is for Claude/human coordination after the handoff. Keep it current wh
 
 ## Active Work
 
-- None recorded at handoff.
+- **Roshaan (backend) — branch `backend`**: Scaffolding the FastAPI backend (`app/`) from scratch off `main`. Done so far:
+  - Foundation: `app/core/config.py` (Pydantic settings), `app/db/session.py` (async engine, 10–20 pool, pooler-aware for Supabase, `rls_tx` GUC helper), security headers + CSRF origin-check middleware, layered rate limiter (Redis-ready interface).
+  - Data model + migration `0001_initial`: `users`, `email_tokens`, `usage_counters`, `share_snapshots`, `login_attempts`, with indexes on every filtered/sorted column and **RLS enabled on all tables** (deny-by-default for Supabase's API; ownership policy + FORCE on `share_snapshots`). App connects as least-privilege `app_user` role (docker init creates it).
+  - **`POST /api/chat/gemini` + `/api/chat/ollama`** — stateless, matches the frontend contract `{ node_id, message, history, linked_context, coding_mode, personalization } → { node_id, reply }`, errors as `{ detail }` (429 on quota). Gemini model fallback on timeout/5xx/429. Anonymous daily quota + network bucket; per-mode history/message truncation re-applied server-side.
+  - PostHog analytics wrapper (no-op until keyed), `/health` + `/health/ready`, Dockerfile, `docker-compose.yml` (local Postgres), Alembic (async), `.env.backend.example`, `docs/backend-security.md`, tests (17 passing: health/headers, prompt truncation, identity, guardrails, chat contract).
+  - **Verified:** syntax, import, all 17 tests. **Not yet verified live:** migration + RLS against Postgres (needs Docker Desktop running) and a real Gemini call (needs `GEMINI_API_KEY`).
+  - **@partner (Jayden):** contract matches your `src/lib/api.ts` exactly — don't change it. I need your exact frontend origins for `CORS_ORIGINS`. Base URL will be `http://localhost:8000` first, deployed URL after. Next: auth (signup/login/lockout/reset + edge-case tests), then share, then analytics events. Owning `app/`, `alembic/`, `docker-compose.yml`, `Dockerfile`, root `requirements*.txt` — coordinate here before touching them.
 
 ## Priority Backlog
 
