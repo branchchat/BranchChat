@@ -25,7 +25,7 @@ from app.core.security_headers import (
     OriginCheckMiddleware,
     SecurityHeadersMiddleware,
 )
-from app.routers import chat, health
+from app.routers import auth, chat, health
 from app.services import analytics
 
 logging.basicConfig(level=logging.INFO)
@@ -66,6 +66,7 @@ def create_app() -> FastAPI:
         )
 
     app.include_router(health.router)
+    app.include_router(auth.router)
     app.include_router(chat.router)
 
     @app.exception_handler(RequestValidationError)

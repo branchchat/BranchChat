@@ -82,6 +82,15 @@ class Settings(BaseSettings):
     # -- Login lockout ------------------------------------------------------
     LOGIN_MAX_FAILED: int = 5
     LOGIN_LOCKOUT_MINUTES: int = 15
+    PASSWORD_MIN_LENGTH: int = 12
+
+    # -- Email (Resend) + token TTLs ----------------------------------------
+    RESEND_API_KEY: str | None = None
+    RESEND_FROM_EMAIL: str | None = None
+    # Frontend origin used to build verification / reset links.
+    APP_BASE_URL: str = "http://localhost:5173"
+    VERIFY_TOKEN_TTL_HOURS: int = 24
+    RESET_TOKEN_TTL_MINUTES: int = 30
 
     # -- Usage quotas -------------------------------------------------------
     FREE_DAILY_MESSAGE_LIMIT: int = 10

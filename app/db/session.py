@@ -26,6 +26,7 @@ from sqlalchemy.ext.asyncio import (
     async_sessionmaker,
     create_async_engine,
 )
+from sqlalchemy.pool import NullPool
 
 from app.core.config import settings
 
@@ -49,16 +50,28 @@ def _app_url() -> str:
     return url
 
 
-engine = create_async_engine(
-    _app_url(),
-    echo=settings.DB_ECHO,
-    pool_size=settings.DB_POOL_SIZE,
-    max_overflow=settings.DB_MAX_OVERFLOW,
-    pool_timeout=settings.DB_POOL_TIMEOUT,
-    pool_recycle=settings.DB_POOL_RECYCLE,
-    pool_pre_ping=True,
-    connect_args=_connect_args(),
-)
+def _engine_kwargs() -> dict[str, object]:
+    kwargs: dict[str, object] = {
+        "echo": settings.DB_ECHO,
+        "pool_pre_ping": True,
+        "connect_args": _connect_args(),
+    }
+    if settings.ENV == "test":
+        # Tests drive the app over a sync TestClient that spins a fresh event
+        # loop per request; a pooled asyncpg connection bound to a finished loop
+        # breaks. NullPool opens/closes a connection within each request's loop.
+        kwargs["poolclass"] = NullPool
+    else:
+        kwargs.update(
+            pool_size=settings.DB_POOL_SIZE,
+            max_overflow=settings.DB_MAX_OVERFLOW,
+            pool_timeout=settings.DB_POOL_TIMEOUT,
+            pool_recycle=settings.DB_POOL_RECYCLE,
+        )
+    return kwargs
+
+
+engine = create_async_engine(_app_url(), **_engine_kwargs())
 
 SessionLocal = async_sessionmaker(
     engine, expire_on_commit=False, class_=AsyncSession

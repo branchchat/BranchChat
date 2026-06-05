@@ -40,6 +40,11 @@ def network_identity(ip: str) -> str:
     return _hmac(f"net:{ip}")
 
 
+def account_identifier(email: str) -> str:
+    """Opaque per-account key for the ``login_attempts`` audit/throttle table."""
+    return _hmac(f"login:{email.strip().lower()}")
+
+
 def new_anon_id() -> str:
     """A fresh, unguessable anonymous id to set as a cookie."""
     return secrets.token_urlsafe(24)

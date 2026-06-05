@@ -65,7 +65,15 @@ PostHog from these events plus the `signup_date` person property.
 
 ## Status
 
-Built: foundation + `/api/chat/{gemini,ollama}` (stateless, anon quota, fallback).
-Schema + RLS for auth/share/analytics is in place; the **auth**, **share**, and
-**analytics-event** endpoints are the next milestones (the table marks which
-items land then).
+Built + verified against live Postgres/Gemini:
+
+* Foundation + `/api/chat/{gemini,ollama}` (stateless, anon quota + network
+  bucket, Gemini fallback). RLS ownership isolation proven against the `app_user`
+  role. Real Gemini call returns end-to-end over HTTP.
+* **Auth**: signup / login / logout / me / usage, password reset, email
+  verification, resend. argon2id, JWT cookie, 5×-failure lockout, single-use
+  hashed tokens, enumeration-safe responses, timing-equalised login. 12 DB-backed
+  regression tests cover the edge cases above.
+
+Next milestones: **share snapshots** (public SECURITY DEFINER read path) and
+**analytics events** beyond signup/login/verify (activation/retention dashboards).

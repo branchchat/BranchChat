@@ -12,13 +12,14 @@ shows directly. Error copy never reveals the network-bucket mechanism.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 from fastapi import HTTPException, status
-from sqlalchemy import text
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
+from app.models import UsageCounter
 from app.services import identity as identity_svc
 
 _UPSERT = text(
@@ -33,8 +34,10 @@ _UPSERT = text(
 )
 
 
-def _today() -> str:
-    return datetime.now(timezone.utc).date().isoformat()
+def _today() -> date:
+    # Return a date object (not a string): the `day` column is a Postgres DATE
+    # and asyncpg binds it directly.
+    return datetime.now(timezone.utc).date()
 
 
 async def _consume(
@@ -96,3 +99,24 @@ async def enforce_message_quota(
         session, identity_svc.network_identity(client_ip), kind, net_limit
     ):
         raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, detail=anon_msg)
+
+
+async def get_status(
+    session: AsyncSession, *, user_id: str | None, anon_id: str
+) -> tuple[int, int]:
+    """Return ``(used, limit)`` for the caller's standard daily bucket today."""
+    if user_id is not None:
+        identity_hash = identity_svc.user_identity(user_id)
+        limit = settings.AUTHENTICATED_DAILY_MESSAGE_LIMIT
+    else:
+        identity_hash = identity_svc.anon_identity(anon_id)
+        limit = settings.FREE_DAILY_MESSAGE_LIMIT
+    result = await session.execute(
+        select(UsageCounter.count).where(
+            UsageCounter.identity_hash == identity_hash,
+            UsageCounter.day == _today(),
+            UsageCounter.kind == "standard",
+        )
+    )
+    used = result.scalar_one_or_none() or 0
+    return used, limit
