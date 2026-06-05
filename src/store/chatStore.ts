@@ -1,16 +1,23 @@
 // chatStore — the canonical, client-authoritative conversation state.
 //
-// Milestone 2 (data core only): types + persisted store + initial root node +
-// selectNode and a placeholder add-node action. No AI calls, no canvas, no UI
-// behavior yet — those land in later milestones (continue/branch/link/compare).
+// Milestone 4 (continue + branch): adds addUserMessage (linear continuation)
+// and branchFromNode (alternate timeline), each creating a user node + a
+// loading assistant node, then filling the assistant via a STUBBED reply.
+// Real AI calls to /api/chat/* arrive in a later milestone; the request shape
+// (history + truncation caps) mirrors the docs so the swap is mechanical.
 //
-// Persisted to localStorage under "branchchat-storage" (see architecture.md
+// Persisted to localStorage under "branchchat-storage" (architecture.md
 // "Persistence"): chats, the active chat id, and coding mode.
 
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
-import type { ChatNode, ChatSessionState, Workspace } from "@/types/chat";
+import type {
+  ChatNode,
+  ChatSessionState,
+  JournalEntry,
+  Workspace,
+} from "@/types/chat";
 
 const STORAGE_KEY = "branchchat-storage";
 
@@ -18,19 +25,36 @@ const ROOT_ID = "root";
 const ROOT_WELCOME =
   "Welcome to BranchChat. Select a node and continue, or branch to explore an alternate path.";
 
+// History + message caps from README "History truncation".
+const HISTORY_LIMITS = {
+  standard: { maxMessages: 20, maxChars: 24_000 },
+  coding: { maxMessages: 28, maxChars: 48_000 },
+};
+const MESSAGE_CHAR_CAP = { standard: 5_000, coding: 10_000 };
+
+// Simulated latency so the loading state is visible with the stub backend.
+const STUB_REPLY_DELAY_MS = 500;
+
+export interface ProviderMessage {
+  role: ChatNode["role"];
+  content: string;
+}
+
 // ---------------------------------------------------------------------------
 // id + path helpers
 // ---------------------------------------------------------------------------
 
-let nodeCounter = 0;
+let idCounter = 0;
 function createNodeId(): string {
-  // Client-generated ids, e.g. node_1739...; counter avoids same-ms collisions.
-  nodeCounter += 1;
-  return `node_${Date.now()}_${nodeCounter}`;
+  idCounter += 1;
+  return `node_${Date.now()}_${idCounter}`;
 }
-
 function createChatId(): string {
   return `chat_${Date.now()}`;
+}
+function createJournalId(): string {
+  idCounter += 1;
+  return `journal_${Date.now()}_${idCounter}`;
 }
 
 // Path from root down to `nodeId`, inclusive. Walks parentId up, then reverses.
@@ -47,6 +71,54 @@ function computeActivePath(
     current = nodes[current].parentId;
   }
   return path.reverse();
+}
+
+// Messages on the path from root to `leafId`, oldest first, trimmed to caps.
+// Exported for layout/history tests.
+export function buildHistoryForNode(
+  nodes: Record<string, ChatNode>,
+  leafId: string | null,
+  codingMode: boolean,
+): ProviderMessage[] {
+  const limits = codingMode ? HISTORY_LIMITS.coding : HISTORY_LIMITS.standard;
+
+  const chain: ChatNode[] = [];
+  let current = leafId;
+  const guard = new Set<string>();
+  while (current && nodes[current] && !guard.has(current)) {
+    guard.add(current);
+    chain.push(nodes[current]);
+    current = nodes[current].parentId;
+  }
+  chain.reverse();
+
+  const messages: ProviderMessage[] = chain
+    .filter((n) => !n.isLoading && n.content)
+    .map((n) => ({ role: n.role, content: n.content }));
+
+  // Keep the most recent messages within both the count and char budgets.
+  const recent = messages.slice(-limits.maxMessages);
+  const out: ProviderMessage[] = [];
+  let total = 0;
+  for (let i = recent.length - 1; i >= 0; i--) {
+    total += recent[i].content.length;
+    if (total > limits.maxChars && out.length > 0) break;
+    out.unshift(recent[i]);
+  }
+  return out;
+}
+
+// Placeholder for the real provider call. Deterministic, references context.
+function stubAssistantReply(
+  userMessage: string,
+  history: ProviderMessage[],
+): string {
+  const priorTurns = history.length;
+  return (
+    `Stubbed reply (no backend yet). You said: “${userMessage}”. ` +
+    `I can see ${priorTurns} prior message${priorTurns === 1 ? "" : "s"} on ` +
+    `this path. Real AI responses arrive once the backend is wired up.`
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -85,115 +157,310 @@ function createInitialChat(
   };
 }
 
+// Create the user + loading-assistant pair under `parentId` and return the new
+// chat plus the two ids. `branchMeta` decorates the user node (branch label /
+// focus text). Returns null if the parent is missing.
+function buildExchange(
+  chat: ChatSessionState,
+  parentId: string,
+  message: string,
+  branchMeta: Pick<ChatNode, "branchLabel" | "focusText">,
+  codingMode: boolean,
+): { chat: ChatSessionState; userId: string; assistantId: string } | null {
+  const parent = chat.nodes[parentId];
+  if (!parent) return null;
+
+  const cap = codingMode ? MESSAGE_CHAR_CAP.coding : MESSAGE_CHAR_CAP.standard;
+  const content = message.slice(0, cap);
+  const now = Date.now();
+
+  const userId = createNodeId();
+  const assistantId = createNodeId();
+
+  const userNode: ChatNode = {
+    id: userId,
+    parentId,
+    role: "user",
+    content,
+    childrenIds: [assistantId],
+    createdAt: now,
+    codingMode: codingMode || undefined,
+    ...branchMeta,
+  };
+  const assistantNode: ChatNode = {
+    id: assistantId,
+    parentId: userId,
+    role: "assistant",
+    content: "",
+    childrenIds: [],
+    isLoading: true,
+    createdAt: now,
+    codingMode: codingMode || undefined,
+  };
+
+  const nodes: Record<string, ChatNode> = {
+    ...chat.nodes,
+    [parentId]: { ...parent, childrenIds: [...parent.childrenIds, userId] },
+    [userId]: userNode,
+    [assistantId]: assistantNode,
+  };
+
+  return {
+    chat: {
+      ...chat,
+      nodes,
+      selectedNodeId: assistantId,
+      activePath: computeActivePath(nodes, assistantId),
+      updatedAt: now,
+    },
+    userId,
+    assistantId,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // store
 // ---------------------------------------------------------------------------
+
+export interface ExchangeResult {
+  userId: string;
+  assistantId: string;
+}
 
 export interface ChatStoreState {
   chats: Record<string, ChatSessionState>;
   activeChatId: string;
   codingMode: boolean;
 
-  // Selection within the active chat.
   selectNode: (nodeId: string) => void;
 
-  // Placeholder add-node action (Milestone 2). Creates a child node and links
-  // it into the tree, then selects it. Real continue/branch + AI replies are
-  // implemented in a later milestone; this exists so the tree can grow in
-  // tests and so the canvas has something to render against.
+  // Linear continuation: append a user message under `parentId` (defaults to
+  // the selected node) and request an assistant reply.
+  addUserMessage: (
+    message: string,
+    parentId?: string,
+  ) => ExchangeResult | null;
+
+  // Branch: append a user message under `parentId` as an alternate timeline,
+  // with a branch label (and optional focus excerpt), then request a reply.
+  branchFromNode: (
+    parentId: string,
+    message: string,
+    opts?: { branchLabel?: string; focusText?: string },
+  ) => ExchangeResult | null;
+
+  // Low-level helper retained from Milestone 2 (used by tests/console).
   addNode: (
     parentId: string,
     init?: Partial<Omit<ChatNode, "id" | "parentId" | "childrenIds">>,
   ) => string | null;
 }
 
-// Mutate the active chat immutably and bump updatedAt.
-function updateActiveChat(
-  state: ChatStoreState,
-  mutate: (chat: ChatSessionState) => ChatSessionState,
-): Partial<ChatStoreState> {
-  const chat = state.chats[state.activeChatId];
-  if (!chat) return {};
-  const next = mutate(chat);
-  next.updatedAt = Date.now();
-  return { chats: { ...state.chats, [chat.id]: next } };
-}
-
 export const useChatStore = create<ChatStoreState>()(
   persist(
-    (set) => {
+    (set, get) => {
+      // After the simulated delay, fill the assistant node with a stub reply.
+      const scheduleStubbedReply = (
+        chatId: string,
+        assistantId: string,
+        userMessage: string,
+      ) => {
+        setTimeout(() => {
+          set((state) => {
+            const chat = state.chats[chatId];
+            const node = chat?.nodes[assistantId];
+            if (!chat || !node) return {};
+            const history = buildHistoryForNode(
+              chat.nodes,
+              node.parentId,
+              state.codingMode,
+            );
+            const reply = stubAssistantReply(userMessage, history);
+            return {
+              chats: {
+                ...state.chats,
+                [chat.id]: {
+                  ...chat,
+                  nodes: {
+                    ...chat.nodes,
+                    [assistantId]: { ...node, content: reply, isLoading: false },
+                  },
+                  updatedAt: Date.now(),
+                },
+              },
+            };
+          });
+        }, STUB_REPLY_DELAY_MS);
+      };
+
       const initialChat = createInitialChat();
+
       return {
         chats: { [initialChat.id]: initialChat },
         activeChatId: initialChat.id,
         codingMode: false,
 
         selectNode: (nodeId) =>
-          set((state) =>
-            updateActiveChat(state, (chat) => {
-              if (!chat.nodes[nodeId]) return chat;
-              return {
-                ...chat,
-                selectedNodeId: nodeId,
-                activePath: computeActivePath(chat.nodes, nodeId),
-              };
-            }),
-          ),
+          set((state) => {
+            const chat = state.chats[state.activeChatId];
+            if (!chat || !chat.nodes[nodeId]) return {};
+            return {
+              chats: {
+                ...state.chats,
+                [chat.id]: {
+                  ...chat,
+                  selectedNodeId: nodeId,
+                  activePath: computeActivePath(chat.nodes, nodeId),
+                  updatedAt: Date.now(),
+                },
+              },
+            };
+          }),
+
+        addUserMessage: (message, parentId) => {
+          const text = message.trim();
+          if (!text) return null;
+
+          let result: ExchangeResult | null = null;
+          set((state) => {
+            const chat = state.chats[state.activeChatId];
+            if (!chat) return {};
+            const built = buildExchange(
+              chat,
+              parentId ?? chat.selectedNodeId,
+              text,
+              {},
+              state.codingMode,
+            );
+            if (!built) return {};
+            result = { userId: built.userId, assistantId: built.assistantId };
+            return { chats: { ...state.chats, [chat.id]: built.chat } };
+          });
+
+          const settled = result as ExchangeResult | null;
+          if (settled) {
+            scheduleStubbedReply(get().activeChatId, settled.assistantId, text);
+          }
+          return settled;
+        },
+
+        branchFromNode: (parentId, message, opts) => {
+          const text = message.trim();
+          if (!text) return null;
+
+          let result: ExchangeResult | null = null;
+          set((state) => {
+            const chat = state.chats[state.activeChatId];
+            const parent = chat?.nodes[parentId];
+            if (!chat || !parent) return {};
+
+            const branchLabel =
+              opts?.branchLabel ?? `Branch ${parent.childrenIds.length + 1}`;
+            const built = buildExchange(
+              chat,
+              parentId,
+              text,
+              { branchLabel, focusText: opts?.focusText },
+              state.codingMode,
+            );
+            if (!built) return {};
+
+            const journalEntries: JournalEntry[] = [
+              ...built.chat.journalEntries,
+              {
+                id: createJournalId(),
+                type: "branch",
+                message: `Branched from "${parent.content.slice(0, 40)}" as ${branchLabel}`,
+                nodeId: built.userId,
+                createdAt: Date.now(),
+              },
+            ];
+
+            result = { userId: built.userId, assistantId: built.assistantId };
+            return {
+              chats: {
+                ...state.chats,
+                [chat.id]: { ...built.chat, journalEntries },
+              },
+            };
+          });
+
+          const settled = result as ExchangeResult | null;
+          if (settled) {
+            scheduleStubbedReply(get().activeChatId, settled.assistantId, text);
+          }
+          return settled;
+        },
 
         addNode: (parentId, init) => {
           let createdId: string | null = null;
-          set((state) =>
-            updateActiveChat(state, (chat) => {
-              const parent = chat.nodes[parentId];
-              if (!parent) return chat;
+          set((state) => {
+            const chat = state.chats[state.activeChatId];
+            const parent = chat?.nodes[parentId];
+            if (!chat || !parent) return {};
 
-              const id = createNodeId();
-              createdId = id;
-              const node: ChatNode = {
-                id,
-                parentId,
-                role: init?.role ?? "user",
-                content: init?.content ?? "",
-                childrenIds: [],
-                createdAt: Date.now(),
-                ...init,
-              };
-
-              const nodes: Record<string, ChatNode> = {
-                ...chat.nodes,
-                [id]: node,
-                [parentId]: {
-                  ...parent,
-                  childrenIds: [...parent.childrenIds, id],
+            const id = createNodeId();
+            createdId = id;
+            const node: ChatNode = {
+              id,
+              parentId,
+              role: init?.role ?? "user",
+              content: init?.content ?? "",
+              childrenIds: [],
+              createdAt: Date.now(),
+              ...init,
+            };
+            const nodes: Record<string, ChatNode> = {
+              ...chat.nodes,
+              [id]: node,
+              [parentId]: {
+                ...parent,
+                childrenIds: [...parent.childrenIds, id],
+              },
+            };
+            return {
+              chats: {
+                ...state.chats,
+                [chat.id]: {
+                  ...chat,
+                  nodes,
+                  selectedNodeId: id,
+                  activePath: computeActivePath(nodes, id),
+                  updatedAt: Date.now(),
                 },
-              };
-
-              return {
-                ...chat,
-                nodes,
-                selectedNodeId: id,
-                activePath: computeActivePath(nodes, id),
-              };
-            }),
-          );
+              },
+            };
+          });
           return createdId;
         },
       };
     },
     {
       name: STORAGE_KEY,
-      // Persist only data, not action functions.
       partialize: (state) => ({
         chats: state.chats,
         activeChatId: state.activeChatId,
         codingMode: state.codingMode,
       }),
+      // Replies aren't persisted mid-flight; clear any stuck loading flags so a
+      // reload doesn't leave a node spinning forever.
+      onRehydrateStorage: () => (state) => {
+        if (!state) return;
+        for (const chat of Object.values(state.chats)) {
+          for (const node of Object.values(chat.nodes)) {
+            if (node.isLoading) {
+              node.isLoading = false;
+              if (!node.content) node.content = "(reply was interrupted)";
+            }
+          }
+        }
+      },
     },
   ),
 );
 
-// Dev affordance: confirm initialization from the browser console via
-// `useChatStore.getState()`. Stripped from production builds.
+// Dev affordance: inspect via `useChatStore.getState()` in the console.
+// Stripped from production builds.
 if (import.meta.env.DEV) {
   (window as unknown as { useChatStore: typeof useChatStore }).useChatStore =
     useChatStore;

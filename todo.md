@@ -16,8 +16,9 @@ This file is for Claude/human coordination after the handoff. Keep it current wh
   - Vite + React + TS + Tailwind + shadcn/ui scaffold.
   - Milestone 2 "data core" — `src/types/chat.ts` (`ChatNode`, `ChatSessionState`) and `src/store/chatStore.ts` (Zustand persisted to `branchchat-storage`, one chat with a root system node, `selectNode` + placeholder `addNode`).
   - Milestone 3 "the canvas" — `src/components/Canvas.tsx` (React Flow graph from the store: pan/zoom, background, controls, minimap, click-to-`selectNode`), `src/components/ChatNode.tsx` (shadcn Card node), `src/lib/treeLayout.ts` (pure top-down layout). Render + select only; nodes auto-laid-out, not draggable.
+  - Milestone 4 "continue + branch" — `chatStore` gains `addUserMessage` (linear continuation) and `branchFromNode` (alternate timeline + branch label + journal entry); each creates a user node + a loading assistant node, filled by a **stubbed** reply after ~0.5s. `buildHistoryForNode` applies the doc's truncation caps (20/24k; coding 28/48k). New `src/components/InputBar.tsx` composer (Send/Branch, Enter-to-send) mounted in `App.tsx`.
 
-  No AI calls yet. Next: node-level actions (continue/branch) and wiring the composer. Owning `src/store/chatStore.ts`, `src/types/chat.ts`, `src/components/Canvas.tsx`, `src/components/ChatNode.tsx`, and `src/lib/treeLayout.ts` for now — coordinate here before touching them.
+  AI replies are still **stubbed** — the request shape matches the docs so the real `/api/chat/*` swap is mechanical (backend is my partner's track). Next: wire the real provider call, plus retry/tags/context-link actions. Owning `src/store/chatStore.ts`, `src/types/chat.ts`, `src/components/Canvas.tsx`, `src/components/ChatNode.tsx`, `src/components/InputBar.tsx`, and `src/lib/treeLayout.ts` for now — coordinate here before touching them.
 
 ## Priority Backlog
 

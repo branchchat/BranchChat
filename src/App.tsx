@@ -1,4 +1,5 @@
 import { Canvas } from "@/components/Canvas"
+import { InputBar } from "@/components/InputBar"
 
 function App() {
   return (
@@ -9,6 +10,9 @@ function App() {
       <main className="min-h-0 flex-1">
         <Canvas />
       </main>
+      <footer className="shrink-0">
+        <InputBar />
+      </footer>
     </div>
   )
 }
