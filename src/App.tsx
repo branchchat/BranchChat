@@ -1,12 +1,15 @@
-import { Button } from "@/components/ui/button"
+import { Canvas } from "@/components/Canvas"
 
 function App() {
   return (
-    <main className="flex min-h-svh flex-col items-center justify-center gap-4">
-      <h1 className="text-4xl font-semibold tracking-tight">BranchChat</h1>
-      <p className="text-muted-foreground">Scaffold ready — no features yet.</p>
-      <Button>Get started</Button>
-    </main>
+    <div className="flex h-svh flex-col">
+      <header className="flex h-12 shrink-0 items-center border-b px-4">
+        <h1 className="text-sm font-semibold tracking-tight">BranchChat</h1>
+      </header>
+      <main className="min-h-0 flex-1">
+        <Canvas />
+      </main>
+    </div>
   )
 }
 

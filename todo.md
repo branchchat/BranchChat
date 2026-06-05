@@ -12,7 +12,12 @@ This file is for Claude/human coordination after the handoff. Keep it current wh
 
 ## Active Work
 
-- **Jayden (frontend) — branch `jayden/frontend`**: Rebuilding the frontend from scratch on top of the handoff docs. Done so far: Vite + React + TS + Tailwind + shadcn/ui scaffold, and Milestone 2 "data core" — `src/types/chat.ts` (`ChatNode`, `ChatSessionState`) and `src/store/chatStore.ts` (Zustand persisted to `branchchat-storage`, one chat with a root system node, `selectNode` + placeholder `addNode`). No canvas/UI or AI calls yet. Next: canvas + node UI milestones. Owning `src/store/chatStore.ts` and `src/types/chat.ts` for now — coordinate here before touching them.
+- **Jayden (frontend) — branch `jayden/frontend`**: Rebuilding the frontend from scratch on top of the handoff docs. Done so far:
+  - Vite + React + TS + Tailwind + shadcn/ui scaffold.
+  - Milestone 2 "data core" — `src/types/chat.ts` (`ChatNode`, `ChatSessionState`) and `src/store/chatStore.ts` (Zustand persisted to `branchchat-storage`, one chat with a root system node, `selectNode` + placeholder `addNode`).
+  - Milestone 3 "the canvas" — `src/components/Canvas.tsx` (React Flow graph from the store: pan/zoom, background, controls, minimap, click-to-`selectNode`), `src/components/ChatNode.tsx` (shadcn Card node), `src/lib/treeLayout.ts` (pure top-down layout). Render + select only; nodes auto-laid-out, not draggable.
+
+  No AI calls yet. Next: node-level actions (continue/branch) and wiring the composer. Owning `src/store/chatStore.ts`, `src/types/chat.ts`, `src/components/Canvas.tsx`, `src/components/ChatNode.tsx`, and `src/lib/treeLayout.ts` for now — coordinate here before touching them.
 
 ## Priority Backlog
 
