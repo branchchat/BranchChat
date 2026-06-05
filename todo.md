@@ -19,7 +19,14 @@ This file is for Claude/human coordination after the handoff. Keep it current wh
   - Milestone 4 "continue + branch" — `chatStore` gains `addUserMessage` (linear continuation) and `branchFromNode` (alternate timeline + branch label + journal entry); each creates a user node + a loading assistant node, filled by a stubbed reply after ~0.5s. `buildHistoryForNode` applies the doc's truncation caps (20/24k; coding 28/48k). New `src/components/InputBar.tsx` composer (Send/Branch, Enter-to-send) mounted in `App.tsx`.
   - Milestone 5 "wire the real backend call" — new `src/lib/api.ts` (`requestChatReply` → `POST {VITE_API_BASE}/api/chat/{gemini|ollama}`, cookie auth, `ChatApiError` surfacing backend `detail`). `chatStore` now calls the real provider when `VITE_API_BASE` is set, else falls back to the stub (stays local-first). Added `retryAssistant`, `isError` node state + red styling, typed env in `src/vite-env.d.ts`, and `.env.example` (`.env` gitignored).
 
-  **Backend contract assumed** from `README (1).md` / `architecture.md`: stateless `POST /api/chat/gemini` with `{ node_id, message, history, linked_context, coding_mode, personalization }` → `{ node_id, reply }`. @partner: if the live endpoint path or payload differs, flag here and I'll adjust `src/lib/api.ts`. **Not yet verified against a live server** — default `npm run dev` still stubs; set `VITE_API_BASE` to hit the real backend. Next: live verify against the running backend, then context-links/retry UI/tags. Owning `src/store/chatStore.ts`, `src/types/chat.ts`, `src/lib/api.ts`, `src/components/Canvas.tsx`, `src/components/ChatNode.tsx`, `src/components/InputBar.tsx`, and `src/lib/treeLayout.ts` for now — coordinate here before touching them.
+  **Backend contract assumed** from `README (1).md` / `architecture.md`: stateless `POST /api/chat/gemini` with `{ node_id, message, history, linked_context, coding_mode, personalization }` → `{ node_id, reply }`. @partner: if the live endpoint path or payload differs, flag here and I'll adjust `src/lib/api.ts`.
+
+  **Verified (frontend side) against a mock backend** — drove the real dev app in headless Chrome against a local mock `/api/chat/gemini`:
+  - Happy path: real `POST` fires (not the stub) with the exact documented payload (`history` is the path up to, not including, the new message; message sent separately); reply renders into the assistant node; no console errors.
+  - Error path: with the backend down, the assistant node flips to `isError` with a friendly message + red styling.
+  - Still **not** verified against the partner's *real* server — the mock implements the contract from the docs. @partner: please confirm your live endpoint accepts this shape.
+
+  Next: live verify against the running backend once reachable, then context-links / retry UI / tags. Owning `src/store/chatStore.ts`, `src/types/chat.ts`, `src/lib/api.ts`, `src/components/Canvas.tsx`, `src/components/ChatNode.tsx`, `src/components/InputBar.tsx`, and `src/lib/treeLayout.ts` for now — coordinate here before touching them.
 
 ## Priority Backlog
 
