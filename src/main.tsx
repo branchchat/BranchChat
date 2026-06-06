@@ -5,10 +5,14 @@ import posthog from 'posthog-js'
 import { PostHogProvider } from '@posthog/react'
 import './index.css'
 import App from './App.tsx'
+import { getConsent } from '@/lib/consent'
 
 posthog.init(import.meta.env.VITE_PUBLIC_POSTHOG_KEY, {
   api_host: import.meta.env.VITE_PUBLIC_POSTHOG_HOST,
   defaults: '2026-01-30',
+  // GDPR/ePrivacy: don't capture, record, or set analytics cookies until the
+  // user accepts in the cookie banner (see CookieConsent.tsx).
+  opt_out_capturing_by_default: true,
   session_recording: {
     // Per-route privacy: the PostHog project baseline is permissive (only
     // passwords masked) so the public landing page is fully visible in
@@ -26,6 +30,12 @@ posthog.init(import.meta.env.VITE_PUBLIC_POSTHOG_KEY, {
     },
   },
 })
+
+// Re-apply a previously stored consent choice. PostHog starts opted out, so we
+// only resume capturing if the user already accepted in a past visit.
+if (getConsent() === 'accepted') {
+  posthog.opt_in_capturing()
+}
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

@@ -6,6 +6,7 @@ import { motion, useReducedMotion } from "motion/react";
 import { Brand } from "@/components/landing/Brand";
 import { SampleChat } from "@/components/landing/SampleChat";
 import { WaitlistForm } from "@/components/landing/WaitlistForm";
+import { openCookieSettings } from "@/lib/consent";
 
 // Scroll-reveal: fade + rise as the element enters the viewport (once).
 function Reveal({
@@ -156,12 +157,33 @@ export function Landing() {
           <p className="text-xs text-muted-foreground">
             © 2026 BranchChat. All rights reserved.
           </p>
-          <Link
-            to="/app"
-            className="text-xs text-muted-foreground transition-colors hover:text-foreground"
-          >
-            Developer access →
-          </Link>
+          <nav className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-xs text-muted-foreground">
+            <Link
+              to="/privacy"
+              className="transition-colors hover:text-foreground"
+            >
+              Privacy
+            </Link>
+            <Link
+              to="/terms"
+              className="transition-colors hover:text-foreground"
+            >
+              Terms
+            </Link>
+            <button
+              type="button"
+              onClick={openCookieSettings}
+              className="transition-colors hover:text-foreground"
+            >
+              Cookie settings
+            </button>
+            <Link
+              to="/app"
+              className="transition-colors hover:text-foreground"
+            >
+              Developer access →
+            </Link>
+          </nav>
         </div>
       </footer>
     </div>
