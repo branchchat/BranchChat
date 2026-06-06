@@ -3,6 +3,11 @@
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? "";
 
+// Abort a stalled signup after this long so the form fails fast and the user can
+// retry, instead of hanging on "Joining…" forever. Flaky mobile / in-app browser
+// connections were silently dropping signups (request never reached the backend).
+const WAITLIST_TIMEOUT_MS = 8000;
+
 export async function joinWaitlist(
   email: string,
   source = "landing",
@@ -12,15 +17,21 @@ export async function joinWaitlist(
     await new Promise((r) => setTimeout(r, 600));
     return;
   }
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), WAITLIST_TIMEOUT_MS);
   let res: Response;
   try {
     res = await fetch(`${API_BASE}/api/waitlist`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email, source }),
+      signal: controller.signal,
     });
   } catch {
+    // Timeout (AbortError) or network failure both land here.
     throw new Error("Couldn't reach the server. Please try again.");
+  } finally {
+    clearTimeout(timer);
   }
   if (!res.ok) {
     let detail = "Something went wrong. Please try again.";
