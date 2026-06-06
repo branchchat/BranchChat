@@ -124,11 +124,38 @@ alembic/            # Migrations (script_location in alembic.ini)
 
 ## Security
 
-- API keys are read from the server environment only; never sent to the frontend.
-- CORS is restricted to `CORS_ORIGINS`.
-- In-memory rate limiting is applied; use Redis for production scale.
-- UUID path/query params are validated.
-- Email verification and password reset tokens are one-time use and expire automatically.
+> **Full reference:** [`docs/backend-security.md`](docs/backend-security.md) — threat
+> model, OWASP checklist → code map, and the 2026-06-06 pre-beta audit (verdict:
+> production-safe with the hardening below). Pre-beta audit summary lives in `todo.md`.
+
+Current posture (verified by the audit):
+
+- **Secrets** are read from the server environment only, never sent to the frontend.
+  **Production refuses to boot** with the default/weak `JWT_SECRET_KEY` or
+  `ANON_IDENTITY_SALT` (fail-closed startup guard) so a misconfigured deploy can't
+  sign forgeable session tokens.
+- **Database is RLS-first.** The app connects as a least-privilege `app_user` role
+  (`NOBYPASSRLS`); ownership is enforced per-transaction via the `app.user_id` GUC
+  (`rls_tx`), so a missed app-level check still can't leak another user's rows. All
+  SQL is parameterized (zero string-built SQL).
+- **Auth:** argon2id hashing, short-lived HS256 JWT in an `HttpOnly`+`Secure`+
+  `SameSite` cookie (cleared with matching attributes), `exp`+`sub` required on decode,
+  per-account lockout (5 → 15 min), enumeration-safe + timing-equalised responses,
+  single-use SHA-256-hashed email/reset tokens.
+- **Rate limiting** is layered (global per-IP, AI per-IP, auth per-IP) — in-process
+  today (single instance); Redis-ready via the `RateLimiter` protocol before scaling.
+- **DoS:** request body-size cap → 413 before parsing; server-side history/quota caps.
+- **Headers / CSRF:** nosniff, frame-deny, strict CSP, Referrer/Permissions-Policy,
+  HSTS (prod); cross-origin writes rejected by an Origin allow-list; CORS is an explicit
+  allow-list with credentials (never `*`).
+- **Supply chain:** non-root container, `.dockerignore` keeps `.env` out of images,
+  `npm audit` clean, backend pins CVE-clean for the reachable surface.
+
+> ⚠️ **The Tech Stack / API Overview / "Changing the AI Agent" sections above are
+> stale** (they describe an older OpenAI-default, server-stored conversation-tree
+> design). The live backend is the **stateless, Gemini-first** service documented in
+> [`architecture.md`](architecture.md) and `docs/backend-security.md`. Rewriting those
+> sections is tracked under P2 in `todo.md`.
 
 ## Email Auth Flows
 

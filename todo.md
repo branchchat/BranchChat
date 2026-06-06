@@ -28,6 +28,36 @@ This file is for Claude/human coordination after the handoff. Keep it current wh
 - New files: `src/components/landing/{Brand,WaitlistForm,SampleChat}.tsx`, `src/lib/{waitlist,devAccess}.ts`. Monochrome, Geist, matches the theme (built with the impeccable / emil-design-eng / design-taste-frontend skills).
 - Waitlist posts to backend `POST /api/waitlist` (new). **Not deployed yet** — needs Pages production branch repointed to `roshaan/landing` (or merged into `jayden/frontend`) + the `waitlist` table created on Supabase. Coordinate here before we change the Pages production branch, since it affects the live site.
 
+### Pre-beta security audit + hardening (2026-06-06, branch `backend`) — @Jayden FYI
+
+Ran a full 4-track audit (auth/session/access-control · injection/RLS/secrets ·
+config/rate-limit/headers/DoS · frontend/deps). **Verdict: production-safe with
+the fixes below.** Full writeup + residual follow-ups in `docs/backend-security.md`.
+
+- **Verified sound** (no action): RLS (forced ownership policy on `share_snapshots`,
+  least-priv `app_user` NOBYPASSRLS, transaction-local GUC), all SQL parameterized
+  (zero string-built SQL), argon2id + enumeration-safe/timing-equalised auth, CORS
+  allow-list + CSRF origin check + full security headers, X-Forwarded-For spoof
+  defence, server-side quotas, no client-shipped secrets, **`npm audit` = 0**, backend
+  pins CVE-clean for the reachable surface. The frontend dev gate (`letmebranch`) is
+  correctly a *soft* gate — real protection is the cookie auth + server quotas.
+- **Fixed + pushed (commit `ccddea3`, 36 tests green):** prod now **refuses to boot
+  with the default/weak `JWT_SECRET_KEY`/`ANON_IDENTITY_SALT`** (was the one critical
+  gap — forgeable sessions); request **body-size cap → 413** (DoS); logout clears the
+  cookie with matching attrs; JWT decode requires `exp`+`sub`; container runs **non-root**
+  + `.dockerignore`.
+- **⚠️ Deploy note:** the boot guard is fail-closed. If the Railway deploy after
+  `ccddea3` fails, it means a required secret is missing/weak in the platform env —
+  set `ENV=production`, a strong `JWT_SECRET_KEY` (≥32 random) and `ANON_IDENTITY_SALT`
+  (≥16), and `COOKIE_SECURE=true`. Railway keeps the previous deploy running until the
+  new one is healthy, so this can't take the site down. Full required-env list in the
+  security doc.
+- **No frontend action needed.** Jayden: the chat contract (`api.ts`) is unchanged;
+  keep `credentials: 'include'`. If your deployed origin ever changes, tell me so I
+  update `CORS_ORIGINS`/`ALLOWED_HOSTS`.
+- **Tests:** backend now runs on **pytest** (`.\.venv\Scripts\python.exe -m pytest -q`),
+  36 passing.
+
 ## Backend ↔ Frontend Integration Notes (from Roshaan / backend → Jayden + frontend Claude)
 
 Everything the frontend needs to integrate. The backend lives in `app/` on branch
@@ -110,6 +140,15 @@ source of truth for the tree.
 - [ ] Consider extracting layout helpers from `chatStore.ts` into a dedicated testable module.
 - [ ] Verify branch creation from collapsed nodes and search navigation into collapsed subtrees.
 - [ ] Check that imported JSON sessions normalize node size/position fields consistently.
+
+### P1 - Security follow-ups (from 2026-06-06 audit, non-blocking for single-instance beta)
+
+- [ ] Durable brute-force throttle: count `login_attempts` by IP (or move the limiter to Redis) so the per-IP brake survives restarts/multiple instances. Today: in-memory 10/min + per-account lockout (single-instance only).
+- [ ] Pin the Supabase CA and restore `verify-full` for the DB connection (currently `sslmode=require`/`CERT_NONE` — encrypted but unauthenticated; documented).
+- [ ] Bump FastAPI so Starlette ≥ 0.47.2 (two DoS CVEs are NOT reachable today — no multipart surface — hygiene only).
+- [ ] Rotate any real `GEMINI_API_KEY` that ever sat in a local `.env` (gitignored, not committed, not in image).
+- [ ] Optional: per-user `token_version`/`jti` for instant session revocation (JWTs are stateless; ≤60-min expiry limits blast radius today).
+- [ ] Set real `ALLOWED_HOSTS` (Host-header validation; default `*` skips `TrustedHostMiddleware`) and confirm `CORS_ORIGINS` in the prod env.
 
 ### P1 - Auth, Usage, And Billing Readiness
 

@@ -113,9 +113,16 @@ Middleware responsibilities:
 - CORS allowlist plus localhost dev support.
 - Host header allowlist when configured.
 - Global API and AI-specific in-memory rate limits.
+- Request body-size cap (413 before parsing) to blunt large-payload DoS.
 - Origin checks for state-changing browser requests.
 - Security headers and no-store headers for auth routes.
 - Dev-only Alembic auto-upgrade on startup.
+
+Security posture is documented in full in `docs/backend-security.md` (threat model,
+OWASP checklist → code map, and the 2026-06-06 pre-beta audit). Notable invariants:
+the app connects as a least-privilege `app_user` role with **RLS enforced per
+transaction** via the `app.user_id` GUC, all SQL is parameterized, and **production
+refuses to boot** with default/weak `JWT_SECRET_KEY`/`ANON_IDENTITY_SALT`.
 
 Key routers:
 
