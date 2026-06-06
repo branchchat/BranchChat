@@ -9,7 +9,8 @@ export const LEGAL = {
   entity: "BranchChat",
   // TODO: ensure this inbox exists and is monitored.
   contactEmail: "privacy@branch-chat.com",
-  // TODO: governing-law jurisdiction, e.g. "the State of Delaware, USA".
-  jurisdiction: "[Governing-law jurisdiction]",
+  // Inferred from the company's Jersey City, NJ location. Update if you
+  // incorporate elsewhere (e.g. Delaware) — confirm during legal review.
+  jurisdiction: "the State of New Jersey, United States",
   effectiveDate: "June 6, 2026",
 } as const;
