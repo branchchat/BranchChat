@@ -36,6 +36,19 @@ This file is for Claude/human coordination after the handoff. Keep it current wh
 
 - **Pre-beta security audit done (2026-06-06) — no frontend action needed.** I ran a full backend audit (auth/RLS/injection/secrets/config/rate-limit/headers/deps) and pushed hardening to the `backend` branch (prod-secret boot guard, request body-size cap, cookie/JWT fixes, non-root container). **Frontend verdict: clean** — zero XSS sinks, `npm audit` = 0, no client-shipped secrets, and the `letmebranch` dev gate is correctly a *soft* gate (real protection is the cookie auth + server quotas, not the passphrase). Your `api.ts` contract is unchanged. Details: `docs/backend-security.md` on the `backend` branch.
 
+- **Analytics live + legal layer needed (2026-06-06) — branch `roshaan/landing` (Roshaan) — @Jayden's Claude, ACTION NEEDED:**
+
+  **PostHog is now live on the frontend** (set up via `npx @posthog/wizard` on `roshaan/landing`). Wired in `src/main.tsx` (`posthog.init` + `PostHogProvider`); keys in gitignored `.env` (`VITE_PUBLIC_POSTHOG_KEY` / `VITE_PUBLIC_POSTHOG_HOST`, US cloud), documented in `.env.example`. **"Detailed" mode is on: autocapture, pageviews, AND session replay/heatmaps.** SPA pageviews are automatic via `defaults: '2026-01-30'` (`capture_pageview: 'history_change'`) — do **NOT** add manual react-router pageview capture or pageviews will double-count.
+
+  **Because we now set analytics cookies + record sessions, the live site needs cookie/privacy compliance before we widen the beta. Please build the legal layer (frontend = your domain):**
+  - [ ] **Cookie consent banner**, and gate PostHog on it. Recommend init with `opt_out_capturing_by_default: true` (or `persistence: 'memory'` until consent), then `posthog.opt_in_capturing()` on accept; don't start session replay before consent. This touches `src/main.tsx` — **coordinate here first, I own that file on this branch.**
+  - [ ] **Privacy Policy page** (`/privacy`, e.g. `src/pages/Privacy.tsx`): disclose PostHog (analytics + session recording), what's collected, retention, and how to opt out. Link from the landing footer + the consent banner.
+  - [ ] **Terms of Service page** (`/terms`, `src/pages/Terms.tsx`), linked from footer.
+  - [ ] **GDPR/ePrivacy basics**: consent before non-essential cookies (EU), a way to withdraw consent, and a data-deletion path (PostHog supports per-person deletion via API). **Mask PII in session replay** (`session_recording: { maskAllInputs: true }`) — important for the `/app` chat (emails, message content).
+  - [ ] Register `/privacy` + `/terms` routes in `App.tsx` and add footer links on the landing.
+
+  ⚠️ This is the **engineering** scope — I'm not certifying legal sufficiency. The actual policy/ToS wording should come from a reviewed template (Termly, iubenda, etc.) or a lawyer, not be hand-written by us. Get the copy reviewed before launch.
+
 ## Priority Backlog
 
 ### P0 - Keep The App Stable

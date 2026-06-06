@@ -1,13 +1,22 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
+import posthog from 'posthog-js'
+import { PostHogProvider } from '@posthog/react'
 import './index.css'
 import App from './App.tsx'
 
+posthog.init(import.meta.env.VITE_PUBLIC_POSTHOG_KEY, {
+  api_host: import.meta.env.VITE_PUBLIC_POSTHOG_HOST,
+  defaults: '2026-01-30',
+})
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <BrowserRouter>
-      <App />
-    </BrowserRouter>
+    <PostHogProvider client={posthog}>
+      <BrowserRouter>
+        <App />
+      </BrowserRouter>
+    </PostHogProvider>
   </StrictMode>,
 )
