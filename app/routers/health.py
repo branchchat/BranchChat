@@ -28,11 +28,9 @@ async def ready(session: AsyncSession = Depends(get_db)) -> dict[str, str]:
     try:
         await session.execute(text("SELECT 1"))
     except Exception as exc:  # pragma: no cover - exercised against a real DB
-        # TEMP DIAGNOSTIC: surface the real driver error to debug the Supabase
-        # pooler connection, then revert to a generic message.
+        # Log the real driver error server-side; return a generic message.
         logging.getLogger("branchchat").exception("readiness DB check failed")
         raise HTTPException(
-            status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"Database unavailable: {type(exc).__name__}: {exc}",
+            status.HTTP_503_SERVICE_UNAVAILABLE, detail="Database unavailable."
         ) from exc
     return {"status": "ready"}
