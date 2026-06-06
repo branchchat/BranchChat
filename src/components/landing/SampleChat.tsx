@@ -116,6 +116,8 @@ export function SampleChat({ className }: { className?: string }) {
           <line x1="18" y1="59" x2="18" y2="85" pathLength={1} className="bc-edge" style={{ animationDelay: "1.4s" }} stroke="currentColor" strokeWidth={1.25} vectorEffect="non-scaling-stroke" />
           <line x1="50" y1="31" x2="50" y2="59" className="bc-fade" style={{ animationDelay: "0.95s" }} stroke="currentColor" strokeWidth={1.25} strokeDasharray="3 3" vectorEffect="non-scaling-stroke" />
           <line x1="50" y1="31" x2="82" y2="59" className="bc-fade" style={{ animationDelay: "1.05s" }} stroke="currentColor" strokeWidth={1.25} strokeDasharray="3 3" vectorEffect="non-scaling-stroke" />
+          <line x1="50" y1="59" x2="50" y2="85" className="bc-fade" style={{ animationDelay: "1.5s" }} stroke="currentColor" strokeWidth={1.25} strokeDasharray="3 3" vectorEffect="non-scaling-stroke" />
+          <line x1="82" y1="59" x2="82" y2="85" className="bc-fade" style={{ animationDelay: "1.6s" }} stroke="currentColor" strokeWidth={1.25} strokeDasharray="3 3" vectorEffect="non-scaling-stroke" />
         </svg>
 
         {/* nodes */}
@@ -123,8 +125,10 @@ export function SampleChat({ className }: { className?: string }) {
         <Node left={50} top={31} delay={0.5} role="assistant" active caret text="Three fit: token bucket, sliding-window log, and counter — all Redis-backed." />
         <Node left={18} top={59} delay={0.95} role="branch" label="token bucket" active text="You — show the Redis Lua impl" />
         <Node left={50} top={59} delay={1.05} role="branch" label="sliding log" text="You — memory cost at 1M keys?" />
-        <Node left={82} top={59} delay={1.15} role="branch" label="compare" running text="You — compare p99 latency" />
+        <Node left={82} top={59} delay={1.15} role="branch" label="compare" text="You — compare p99 latency" />
         <Node left={18} top={85} delay={1.5} role="assistant" active code={"local t = redis.call('TIME')[1]\nlocal n = redis.call('GET', k) or burst"} />
+        <Node left={50} top={85} delay={1.6} role="assistant" text="~24 B/key → ~24 MB at 1M keys; trim old entries with ZREMRANGEBYSCORE." />
+        <Node left={82} top={85} delay={1.7} role="assistant" text="Token bucket p99 ~0.4 ms vs sliding log ~1.1 ms at 1M keys." />
       </div>
     </div>
   );
