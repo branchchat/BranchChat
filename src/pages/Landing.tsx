@@ -1,9 +1,35 @@
+import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { Columns2, GitBranch, Link2 } from "lucide-react";
+import { motion, useReducedMotion } from "motion/react";
 
 import { Brand } from "@/components/landing/Brand";
 import { SampleChat } from "@/components/landing/SampleChat";
 import { WaitlistForm } from "@/components/landing/WaitlistForm";
+
+// Scroll-reveal: fade + rise as the element enters the viewport (once).
+function Reveal({
+  children,
+  delay = 0,
+  className,
+}: {
+  children: ReactNode;
+  delay?: number;
+  className?: string;
+}) {
+  const reduce = useReducedMotion();
+  return (
+    <motion.div
+      className={className}
+      initial={reduce ? false : { opacity: 0, y: 22 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true, amount: 0.3 }}
+      transition={{ duration: 0.6, delay, ease: [0.16, 1, 0.3, 1] }}
+    >
+      {children}
+    </motion.div>
+  );
+}
 
 const capabilities = [
   {
@@ -25,14 +51,20 @@ const capabilities = [
 
 export function Landing() {
   return (
-    <div className="min-h-[100dvh] bg-background text-foreground antialiased">
+    <div className="relative min-h-[100dvh] bg-background text-foreground antialiased">
+      {/* faint canvas texture behind the hero (ties to the product, less flat) */}
+      <div
+        className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[760px] bc-grid text-foreground/[0.05] [mask-image:radial-gradient(58%_46%_at_50%_28%,black,transparent)]"
+        aria-hidden="true"
+      />
+
       {/* ── Nav ─────────────────────────────────────────────────────────── */}
       <header className="sticky top-0 z-30 border-b border-border/60 bg-background/80 backdrop-blur">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
           <Brand />
           <a
             href="#waitlist"
-            className="bc-press hidden h-9 items-center rounded-xl bg-foreground px-4 text-sm font-medium text-background hover:bg-foreground/90 sm:inline-flex"
+            className="bc-press hidden h-9 items-center rounded-xl bg-foreground px-4 text-sm font-medium text-background transition-transform hover:-translate-y-0.5 hover:bg-foreground/90 sm:inline-flex"
           >
             Join waitlist
           </a>
@@ -46,7 +78,7 @@ export function Landing() {
             className="bc-rise inline-flex items-center gap-2 rounded-full border bg-secondary/50 px-3 py-1 text-xs text-muted-foreground"
             style={{ animationDelay: "0.05s" }}
           >
-            <span className="size-1.5 rounded-full bg-foreground" />
+            <span className="bc-pulse size-1.5 rounded-full bg-foreground text-foreground/40" />
             Early access · invite-only
           </div>
 
@@ -77,31 +109,33 @@ export function Landing() {
 
         {/* live product preview */}
         <div
-          className="bc-rise mx-auto mt-16 max-w-3xl"
+          className="bc-rise mx-auto mt-16 max-w-4xl"
           style={{ animationDelay: "0.42s" }}
         >
           <SampleChat />
         </div>
       </section>
 
-      {/* ── Capabilities (hairline-divided row, not floating cards) ──────── */}
+      {/* ── Capabilities (hairline-divided row, reveal on scroll) ────────── */}
       <section className="mx-auto max-w-5xl px-6 py-16 sm:py-24">
         <div className="grid gap-px overflow-hidden rounded-2xl border bg-border sm:grid-cols-3">
-          {capabilities.map((c) => (
-            <div key={c.title} className="bg-background p-6 sm:p-7">
-              <c.icon className="size-5 text-foreground" strokeWidth={1.75} />
-              <h3 className="mt-4 text-sm font-semibold">{c.title}</h3>
-              <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
-                {c.body}
-              </p>
-            </div>
+          {capabilities.map((c, i) => (
+            <Reveal key={c.title} delay={i * 0.08}>
+              <div className="h-full bg-background p-6 transition-colors hover:bg-secondary/40 sm:p-7">
+                <c.icon className="size-5 text-foreground" strokeWidth={1.75} />
+                <h3 className="mt-4 text-sm font-semibold">{c.title}</h3>
+                <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
+                  {c.body}
+                </p>
+              </div>
+            </Reveal>
           ))}
         </div>
       </section>
 
       {/* ── Closing CTA ─────────────────────────────────────────────────── */}
       <section className="border-t border-border/60">
-        <div className="mx-auto max-w-2xl px-6 py-20 text-center sm:py-28">
+        <Reveal className="mx-auto max-w-2xl px-6 py-20 text-center sm:py-28">
           <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">
             Get early access
           </h2>
@@ -112,7 +146,7 @@ export function Landing() {
           <div className="mx-auto mt-7 max-w-md text-left">
             <WaitlistForm source="closing-cta" />
           </div>
-        </div>
+        </Reveal>
       </section>
 
       {/* ── Footer ──────────────────────────────────────────────────────── */}

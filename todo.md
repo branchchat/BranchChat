@@ -21,6 +21,19 @@ This file is for Claude/human coordination after the handoff. Keep it current wh
 
   **Backend contract assumed** from `README (1).md` / `architecture.md`: stateless `POST /api/chat/gemini` with `{ node_id, message, history, linked_context, coding_mode, personalization }` → `{ node_id, reply }`. @partner: if the live endpoint path or payload differs, flag here and I'll adjust `src/lib/api.ts`. **Not yet verified against a live server** — default `npm run dev` still stubs; set `VITE_API_BASE` to hit the real backend. Next: live verify against the running backend, then context-links/retry UI/tags. Owning `src/store/chatStore.ts`, `src/types/chat.ts`, `src/lib/api.ts`, `src/components/Canvas.tsx`, `src/components/ChatNode.tsx`, `src/components/InputBar.tsx`, and `src/lib/treeLayout.ts` for now — coordinate here before touching them.
 
+- **Roshaan (backend + landing) — branch `roshaan/landing`** — @Jayden's Claude, please read:
+
+  **The whole product is LIVE in production.** 🎉
+  - **Backend**: built + deployed on **Railway at https://api.branch-chat.com** (FastAPI, Docker). DB on **Supabase** (Postgres + RLS, via least-priv `app_user` over the transaction pooler). Endpoints: `/api/chat/{gemini,ollama}` (Gemini + fallback), full **auth** (`/api/auth/*`: signup/login/logout/me/usage/reset/verify — argon2, JWT cookie, lockout, enumeration-safe), **daily quotas**, share schema, **`POST /api/waitlist`**. **Your `src/lib/api.ts` contract is CORRECT and live — change nothing.** Keep `credentials: 'include'`.
+  - **Frontend**: I built a **landing page + waitlist** on this branch (`roshaan/landing`, off your `jayden/frontend`). **Your chat is UNTOUCHED** — I only re-routed it. Added `react-router-dom` + `motion`: `/` = landing, `/app` = your real chat behind a **soft dev passphrase gate** (`letmebranch`, or `/app?key=letmebranch`). New files are all mine: `src/pages/{Landing,AppGate}.tsx`, `src/components/AppChat.tsx` (= your old App.tsx content), `src/components/landing/*`, `src/lib/{waitlist,devAccess}.ts`; `App.tsx`/`main.tsx` now route; `public/_redirects` for SPA. Built with design skills (impeccable / emil-design-eng / design-taste-frontend / ui-ux-pro-max); monochrome + Geist, animated.
+
+  **⚠️ What changed that affects YOU:**
+  1. **Cloudflare Pages production branch is now `roshaan/landing`, NOT `jayden/frontend`.** So pushing to `jayden/frontend` no longer deploys to **branch-chat.com**. (Live site = this branch.)
+  2. **To ship your chat work to production:** keep building on `jayden/frontend` as normal, then when ready **merge `jayden/frontend` → `roshaan/landing`** (coordinate here first). The gated `/app` route renders YOUR `Canvas`/`ChatNode`/`InputBar`/`chatStore`, so merging brings your improvements (Outline/Connections/Reading, tags, compare, share) straight to the live `/app`. Or we agree to make this the trunk / merge both to `main`.
+  3. **Don't rename/move** `src/components/{Canvas,ChatNode,InputBar}.tsx` or the store — `AppChat.tsx` imports them. Don't change the `api.ts` request/response shape (backend depends on it).
+  4. **Run locally:** `npm run dev`, set `VITE_API_BASE=https://api.branch-chat.com` (or `http://localhost:8000` with the backend running) — chat now gets REAL Gemini replies. Dev gate passphrase: `letmebranch`.
+  5. Backend CORS currently allows `branch-chat.com` + `www.branch-chat.com` only. If you serve from another origin, tell me and I'll allowlist it.
+
 ## Priority Backlog
 
 ### P0 - Keep The App Stable

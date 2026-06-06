@@ -70,7 +70,7 @@ export function WaitlistForm({
         <button
           type="submit"
           disabled={state === "loading"}
-          className="bc-press inline-flex h-11 items-center justify-center gap-1.5 rounded-xl bg-foreground px-5 text-sm font-medium text-background shadow-sm hover:bg-foreground/90 disabled:opacity-70"
+          className="bc-press inline-flex h-11 items-center justify-center gap-1.5 rounded-xl bg-foreground px-5 text-sm font-medium text-background shadow-sm transition-transform hover:-translate-y-0.5 hover:bg-foreground/90 disabled:opacity-70"
         >
           {state === "loading" ? (
             <>
