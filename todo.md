@@ -45,9 +45,10 @@ This file is for Claude/human coordination after the handoff. Keep it current wh
   - [x] **Privacy Policy** (`src/pages/Privacy.tsx`, `/privacy`) + **Terms** (`src/pages/Terms.tsx`, `/terms`) via shared `src/components/legal/LegalLayout.tsx`; linked from landing + legal footers.
   - [x] **Session-replay PII masking** — per-route `.ph-mask` on `/app` (chat text + inputs censored; landing visible). **Leave intact** — the consent gate composes with this.
   - [x] Routes registered in `App.tsx`; `<CookieConsent />` mounted globally.
+  - [x] **Production wired (2026-06-06):** added `VITE_PUBLIC_POSTHOG_KEY` + `VITE_PUBLIC_POSTHOG_HOST` to Cloudflare Pages env (they were missing — PostHog wasn't actually running in prod before) and redeployed. **Reverse proxy live:** prod routes PostHog through `https://t.branch-chat.com` (PostHog Managed proxy + a `t` CNAME in Cloudflare, gray-cloud / DNS-only). Verified on live branch-chat.com — config loads via the proxy, consent-gated.
   - [ ] **Data-deletion path** (PostHog per-person deletion via API) — not wired yet; low priority during early beta.
 
-  ⚠️ **HUMAN TODO before launch (not code):** the policy/ToS copy is a *template draft*. Fill the placeholders in `src/lib/legal.ts` (`entity`, `jurisdiction`, `contactEmail`) and have the wording reviewed by a lawyer or a service (Termly/iubenda). Not legally certified.
+  ⚠️ **HUMAN TODO before launch (not code):** `src/lib/legal.ts` now has real values — `entity` = "BranchChat", `jurisdiction` = New Jersey, `contactEmail` = `branchchat@gmail.com`. The policy/ToS copy is still a *template draft* — have the wording reviewed by a lawyer or a service (Termly/iubenda) before relying on it. Not legally certified.
 
 ## Priority Backlog
 

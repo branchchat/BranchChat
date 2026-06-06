@@ -7,8 +7,7 @@ export const LEGAL = {
   // Trading name. If/when you incorporate, switch to the full registered
   // legal name (e.g. "BranchChat, Inc.").
   entity: "BranchChat",
-  // TODO: ensure this inbox exists and is monitored.
-  contactEmail: "privacy@branch-chat.com",
+  contactEmail: "branchchat@gmail.com",
   // Inferred from the company's Jersey City, NJ location. Update if you
   // incorporate elsewhere (e.g. Delaware) — confirm during legal review.
   jurisdiction: "the State of New Jersey, United States",
