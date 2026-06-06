@@ -21,6 +21,13 @@ This file is for Claude/human coordination after the handoff. Keep it current wh
   - **Auth milestone done + verified live** (commit pending): `app/routers/auth.py` — `POST /api/auth/{signup,login,logout,request-password-reset,reset-password,verify-email,resend-verification}`, `GET /api/auth/{me,usage}`. argon2id hashing, JWT in HttpOnly cookie, 5×-failure account lockout, single-use SHA-256-hashed email tokens, enumeration-safe responses (uniform 401 / generic signup+reset), timing-equalised login. PostHog events: user_signed_up (+ anon→user alias), user_logged_in, email_verified. Verified end-to-end against Docker Postgres + real Gemini: migration applied, **RLS ownership isolation proven**, real chat call returns over HTTP, 30 tests passing (incl. 12 auth edge-case + 1 quota, DB-backed). Fixed a `usage_counters.day` date-binding bug found only by the live run.
   - **@partner (Jayden):** contract matches your `src/lib/api.ts` exactly — don't change it. Next: share snapshots, then analytics/retention. Owning `app/`, `alembic/`, `docker-compose.yml`, `Dockerfile`, root `requirements*.txt` — coordinate here before touching them. Full integration details below 👇
 
+### Landing page (branch `roshaan/landing`, off `jayden/frontend`) — @Jayden heads-up
+
+- Built a marketing **landing page + waitlist** and gated the real chat. **Your Canvas/ChatNode/InputBar/chatStore are UNTOUCHED** — I only re-routed them.
+- Added `react-router-dom`: `/` → new `src/pages/Landing.tsx`, `/app` → `src/pages/AppGate.tsx` (a soft dev passphrase gate, passphrase `letmebranch`, or `/app?key=letmebranch`) → renders `src/components/AppChat.tsx` (= your old App.tsx content). `src/App.tsx` + `src/main.tsx` now do routing; `public/_redirects` added for SPA deep-links.
+- New files: `src/components/landing/{Brand,WaitlistForm,SampleChat}.tsx`, `src/lib/{waitlist,devAccess}.ts`. Monochrome, Geist, matches the theme (built with the impeccable / emil-design-eng / design-taste-frontend skills).
+- Waitlist posts to backend `POST /api/waitlist` (new). **Not deployed yet** — needs Pages production branch repointed to `roshaan/landing` (or merged into `jayden/frontend`) + the `waitlist` table created on Supabase. Coordinate here before we change the Pages production branch, since it affects the live site.
+
 ## Backend ↔ Frontend Integration Notes (from Roshaan / backend → Jayden + frontend Claude)
 
 Everything the frontend needs to integrate. The backend lives in `app/` on branch
