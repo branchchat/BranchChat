@@ -106,10 +106,15 @@ export function Landing() {
             <WaitlistForm source="hero" />
           </div>
         </div>
-      </section>
 
-      {/* live product preview — a solid, advanced branching session */}
-      <SampleChat />
+        {/* live product preview */}
+        <div
+          className="bc-rise mx-auto mt-16 max-w-4xl"
+          style={{ animationDelay: "0.42s" }}
+        >
+          <SampleChat />
+        </div>
+      </section>
 
       {/* ── Capabilities (hairline-divided row, reveal on scroll) ────────── */}
       <section className="mx-auto max-w-5xl px-6 py-16 sm:py-24">
