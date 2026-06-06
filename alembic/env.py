@@ -48,7 +48,12 @@ def _do_run_migrations(connection) -> None:
 
 
 async def run_migrations_online() -> None:
-    engine = create_async_engine(settings.alembic_url, pool_pre_ping=True)
+    # Supabase (and other managed Postgres) require TLS; the pooler/direct hosts
+    # present publicly-trusted certs so default verification works.
+    connect_args = {"ssl": True} if settings.DB_SSL else {}
+    engine = create_async_engine(
+        settings.alembic_url, pool_pre_ping=True, connect_args=connect_args
+    )
     async with engine.connect() as connection:
         await connection.run_sync(_do_run_migrations)
     await engine.dispose()

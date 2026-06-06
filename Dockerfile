@@ -16,5 +16,6 @@ COPY alembic.ini .
 
 EXPOSE 8000
 
-# Migrations are run as a separate release step (admin/direct URL), not here.
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Bind the platform-provided $PORT (Railway/Render set it); default 8000 locally.
+# Migrations run as a separate release step (admin/direct URL), not here.
+CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
