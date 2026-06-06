@@ -34,6 +34,8 @@ This file is for Claude/human coordination after the handoff. Keep it current wh
   4. **Run locally:** `npm run dev`, set `VITE_API_BASE=https://api.branch-chat.com` (or `http://localhost:8000` with the backend running) — chat now gets REAL Gemini replies. Dev gate passphrase: `letmebranch`.
   5. Backend CORS currently allows `branch-chat.com` + `www.branch-chat.com` only. If you serve from another origin, tell me and I'll allowlist it.
 
+- **Pre-beta security audit done (2026-06-06) — no frontend action needed.** I ran a full backend audit (auth/RLS/injection/secrets/config/rate-limit/headers/deps) and pushed hardening to the `backend` branch (prod-secret boot guard, request body-size cap, cookie/JWT fixes, non-root container). **Frontend verdict: clean** — zero XSS sinks, `npm audit` = 0, no client-shipped secrets, and the `letmebranch` dev gate is correctly a *soft* gate (real protection is the cookie auth + server quotas, not the passphrase). Your `api.ts` contract is unchanged. Details: `docs/backend-security.md` on the `backend` branch.
+
 ## Priority Backlog
 
 ### P0 - Keep The App Stable
