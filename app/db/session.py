@@ -17,6 +17,7 @@ row-level-security policies enforce ownership even if an app-level check is miss
 
 from __future__ import annotations
 
+import ssl
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -31,10 +32,26 @@ from sqlalchemy.pool import NullPool
 from app.core.config import settings
 
 
+def _ssl_context() -> ssl.SSLContext:
+    """TLS context for managed Postgres (Supabase).
+
+    Supabase's pooler presents a certificate signed by a PRIVATE CA, so default
+    verification fails with "self-signed certificate in certificate chain". We
+    keep the connection encrypted in transit but skip CA verification
+    (equivalent to libpq ``sslmode=require``). To upgrade to full verification,
+    pin Supabase's CA cert via ``ctx.load_verify_locations(...)`` and re-enable
+    ``check_hostname`` / ``verify_mode``.
+    """
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+    return ctx
+
+
 def _connect_args() -> dict[str, object]:
     args: dict[str, object] = {}
     if settings.DB_SSL:
-        args["ssl"] = True
+        args["ssl"] = _ssl_context()
     if settings.DB_USE_PGBOUNCER:
         # Disable asyncpg's own prepared-statement cache.
         args["statement_cache_size"] = 0

@@ -8,6 +8,7 @@ connects as the restricted ``app_user`` role at runtime.
 from __future__ import annotations
 
 import asyncio
+import ssl
 from logging.config import fileConfig
 
 from alembic import context
@@ -48,9 +49,14 @@ def _do_run_migrations(connection) -> None:
 
 
 async def run_migrations_online() -> None:
-    # Supabase (and other managed Postgres) require TLS; the pooler/direct hosts
-    # present publicly-trusted certs so default verification works.
-    connect_args = {"ssl": True} if settings.DB_SSL else {}
+    # Supabase requires TLS but its pooler uses a private CA; encrypt without CA
+    # verification (sslmode=require). See app/db/session.py:_ssl_context.
+    connect_args: dict = {}
+    if settings.DB_SSL:
+        ctx = ssl.create_default_context()
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+        connect_args["ssl"] = ctx
     engine = create_async_engine(
         settings.alembic_url, pool_pre_ping=True, connect_args=connect_args
     )
