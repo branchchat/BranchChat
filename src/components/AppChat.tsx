@@ -9,7 +9,10 @@ import { InputBar } from "@/components/InputBar";
 
 export function AppChat() {
   return (
-    <div className="flex h-svh flex-col">
+    // ph-mask: censors all chat text + input values in PostHog session replay
+    // (see session_recording config in main.tsx). The landing page is outside
+    // this subtree and remains fully visible.
+    <div className="ph-mask flex h-svh flex-col">
       <header className="flex h-12 shrink-0 items-center justify-between border-b px-4">
         <h1 className="text-sm font-semibold tracking-tight">BranchChat</h1>
         <Link
