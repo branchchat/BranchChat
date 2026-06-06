@@ -128,3 +128,39 @@
     @apply font-sans;
     }
 }
+
+/* ── Landing motion + helpers ───────────────────────────────────────────────
+   Emil Kowalski's custom easings (built-in CSS easings are too weak), entrances
+   never start from scale(0), only transform/opacity animate, reduced-motion safe. */
+:root {
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+}
+
+@keyframes bc-rise {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes bc-node-in {
+  from { opacity: 0; transform: translateY(10px) scale(0.96); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes bc-fade { to { opacity: 1; } }
+
+.bc-rise    { opacity: 0; animation: bc-rise 0.7s var(--ease-out) forwards; }
+.bc-node-in { opacity: 0; animation: bc-node-in 0.55s var(--ease-out) forwards; }
+.bc-fade    { opacity: 0; animation: bc-fade 0.6s var(--ease-out) forwards; }
+
+/* tactile press feedback (scale 0.97 on :active) */
+.bc-press { transition: transform 160ms var(--ease-out), background-color 160ms var(--ease-out), border-color 160ms var(--ease-out); }
+.bc-press:active { transform: scale(0.97); }
+
+/* dotted canvas grid for the demo */
+.bc-grid {
+  background-image: radial-gradient(currentColor 1px, transparent 1px);
+  background-size: 22px 22px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bc-rise, .bc-node-in, .bc-fade { animation: none; opacity: 1; transform: none; }
+}
