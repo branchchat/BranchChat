@@ -106,15 +106,10 @@ export function Landing() {
             <WaitlistForm source="hero" />
           </div>
         </div>
-
-        {/* live product preview */}
-        <div
-          className="bc-rise mx-auto mt-16 max-w-4xl"
-          style={{ animationDelay: "0.42s" }}
-        >
-          <SampleChat />
-        </div>
       </section>
+
+      {/* live product preview — grows / branches as you scroll */}
+      <SampleChat />
 
       {/* ── Capabilities (hairline-divided row, reveal on scroll) ────────── */}
       <section className="mx-auto max-w-5xl px-6 py-16 sm:py-24">
