@@ -36,19 +36,18 @@ This file is for Claude/human coordination after the handoff. Keep it current wh
 
 - **Pre-beta security audit done (2026-06-06) — no frontend action needed.** I ran a full backend audit (auth/RLS/injection/secrets/config/rate-limit/headers/deps) and pushed hardening to the `backend` branch (prod-secret boot guard, request body-size cap, cookie/JWT fixes, non-root container). **Frontend verdict: clean** — zero XSS sinks, `npm audit` = 0, no client-shipped secrets, and the `letmebranch` dev gate is correctly a *soft* gate (real protection is the cookie auth + server quotas, not the passphrase). Your `api.ts` contract is unchanged. Details: `docs/backend-security.md` on the `backend` branch.
 
-- **Analytics live + legal layer needed (2026-06-06) — branch `roshaan/landing` (Roshaan) — @Jayden's Claude, ACTION NEEDED:**
+- **Analytics + legal layer (2026-06-06) — branch `roshaan/landing` (Roshaan) — @Jayden's Claude, FYI (now DONE):**
 
   **PostHog is now live on the frontend** (set up via `npx @posthog/wizard` on `roshaan/landing`). Wired in `src/main.tsx` (`posthog.init` + `PostHogProvider`); keys in gitignored `.env` (`VITE_PUBLIC_POSTHOG_KEY` / `VITE_PUBLIC_POSTHOG_HOST`, US cloud), documented in `.env.example`. **"Detailed" mode is on: autocapture, pageviews, AND session replay/heatmaps.** SPA pageviews are automatic via `defaults: '2026-01-30'` (`capture_pageview: 'history_change'`) — do **NOT** add manual react-router pageview capture or pageviews will double-count.
 
-  **Because we now set analytics cookies + record sessions, the live site needs cookie/privacy compliance before we widen the beta. Please build the legal layer (frontend = your domain):**
-  - [ ] **Cookie consent banner**, and gate PostHog on it. Recommend init with `opt_out_capturing_by_default: true` (or `persistence: 'memory'` until consent), then `posthog.opt_in_capturing()` on accept; don't start session replay before consent. This touches `src/main.tsx` — **coordinate here first, I own that file on this branch.**
-  - [ ] **Privacy Policy page** (`/privacy`, e.g. `src/pages/Privacy.tsx`): disclose PostHog (analytics + session recording), what's collected, retention, and how to opt out. Link from the landing footer + the consent banner.
-  - [ ] **Terms of Service page** (`/terms`, `src/pages/Terms.tsx`), linked from footer.
-  - [ ] **GDPR/ePrivacy basics**: consent before non-essential cookies (EU), a way to withdraw consent, and a data-deletion path (PostHog supports per-person deletion via API).
-  - [x] **Session-replay PII masking — DONE (Roshaan, 2026-06-06).** Per-route: `.ph-mask` on the `/app` chat root (`AppChat.tsx`) + `maskTextSelector`/`maskInputFn` in `main.tsx` censor ALL chat text + input values; the public landing stays fully visible; PostHog project masking baseline = "mask only passwords". Verified recording is live with `.ph-mask` applied. **Leave this intact** when you wire the consent gate.
-  - [ ] Register `/privacy` + `/terms` routes in `App.tsx` and add footer links on the landing.
+  **Cookie/privacy compliance — DONE (Roshaan, 2026-06-06), committed on `roshaan/landing`:**
+  - [x] **Cookie consent banner** (`src/components/CookieConsent.tsx`) gates PostHog. `main.tsx` now inits with `opt_out_capturing_by_default: true`; Accept → `opt_in_capturing()`, Decline → `opt_out_capturing()`. Choice persists (`src/lib/consent.ts`); footer **"Cookie settings"** re-opens it to withdraw consent. **Verified: pre-consent only config/flags load — no `/e/` events, no `/s/` recording; after Accept, capture starts.**
+  - [x] **Privacy Policy** (`src/pages/Privacy.tsx`, `/privacy`) + **Terms** (`src/pages/Terms.tsx`, `/terms`) via shared `src/components/legal/LegalLayout.tsx`; linked from landing + legal footers.
+  - [x] **Session-replay PII masking** — per-route `.ph-mask` on `/app` (chat text + inputs censored; landing visible). **Leave intact** — the consent gate composes with this.
+  - [x] Routes registered in `App.tsx`; `<CookieConsent />` mounted globally.
+  - [ ] **Data-deletion path** (PostHog per-person deletion via API) — not wired yet; low priority during early beta.
 
-  ⚠️ This is the **engineering** scope — I'm not certifying legal sufficiency. The actual policy/ToS wording should come from a reviewed template (Termly, iubenda, etc.) or a lawyer, not be hand-written by us. Get the copy reviewed before launch.
+  ⚠️ **HUMAN TODO before launch (not code):** the policy/ToS copy is a *template draft*. Fill the placeholders in `src/lib/legal.ts` (`entity`, `jurisdiction`, `contactEmail`) and have the wording reviewed by a lawyer or a service (Termly/iubenda). Not legally certified.
 
 ## Priority Backlog
 
