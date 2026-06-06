@@ -9,6 +9,7 @@ from app.models.login_attempt import LoginAttempt
 from app.models.share import ShareSnapshot
 from app.models.usage import UsageCounter
 from app.models.user import User
+from app.models.waitlist import WaitlistEntry
 
 __all__ = [
     "EmailToken",
@@ -16,4 +17,5 @@ __all__ = [
     "ShareSnapshot",
     "UsageCounter",
     "User",
+    "WaitlistEntry",
 ]
