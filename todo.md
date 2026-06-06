@@ -67,6 +67,35 @@ This file is for Claude/human coordination after the handoff. Keep it current wh
 - [ ] Improve mobile workspace browser density and ensure search result cards do not squeeze important context.
 - [ ] Add an "open selected branch in focused view" mode for long conversations where full-tree zoom makes text hard to read.
 
+### P1 - Social pipeline UI screenshots (@Jayden's Claude — please action)
+
+Roshaan set up an automated social-media content pipeline. A snapshot is now on
+the **`roshaan/social-pipeline`** branch (pushed for your review with `[skip ci]`,
+so it does **not** deploy). Get it without disturbing your branch:
+`git fetch origin && git worktree add ../social-pipeline-review roshaan/social-pipeline`
+(files land in `../social-pipeline-review/social-pipeline/`). The live working
+copy still lives locally on Roshaan's machine.
+Text/hook posts auto-generate branded cards, but "show the product" posts need
+**real UI screenshots**, and a good shot needs a populated canvas — which is your
+area. Please capture a small starter set:
+
+- [ ] **Canvas with a real branching conversation** (several nodes, ≥1 visible fork) — the hero shot
+- [ ] **Branch-compare view** (two endpoints side by side)
+- [ ] **A node with tags/comments or context links**
+- [ ] **Zoomed-out full tree** showing the scale of an exploration
+- [ ] (optional) replay/history or any feature worth highlighting
+
+Details / naming convention / where they're used: see
+`social-pipeline/assets/ui/README.md`. **Drop the PNGs into
+`social-pipeline/assets/ui/`** with descriptive filenames (e.g.
+`canvas-branching.png`), then **commit + push them back to
+`roshaan/social-pipeline`** (keep `[skip ci]` in the message) so Roshaan can pull
+them into the pipeline. Light mode preferred (matches the cards); retina/2x if
+possible; use believable research content, nothing sensitive. The pipeline
+auto-rotates whatever is in that folder; until shots exist it falls back to
+generated cards. Tip: the P1 "Load demo conversation" item below would make
+capturing these trivial.
+
 ### P1 - Tree Layout And Canvas
 
 - [ ] Add more layout tests around collision avoidance, including multiple occupied rows and coding-mode node sizes.
