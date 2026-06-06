@@ -1,0 +1,20 @@
+# Defense in depth: never let secrets or local cruft into the image, even if a
+# future Dockerfile switches to `COPY . .`.
+.env
+.env.*
+!.env*.example
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+.git/
+.gitignore
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+tests/
+docs/
+*.md
+.vscode/
+.idea/

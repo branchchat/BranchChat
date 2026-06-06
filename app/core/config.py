@@ -17,8 +17,17 @@ from __future__ import annotations
 from functools import lru_cache
 from typing import Annotated, Literal
 
-from pydantic import field_validator
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
+
+# Dev-only sentinel secrets. Shipping either of these to production is a hard
+# startup error (see ``_forbid_insecure_secrets_in_production``): a known
+# JWT_SECRET_KEY lets anyone forge auth tokens, and a known ANON_IDENTITY_SALT
+# lets anyone reverse the anon-identity hashes.
+_DEV_JWT_SECRET = "dev-insecure-change-me"
+_DEV_ANON_SALT = "dev-insecure-anon-salt"
+# Floor for a real HMAC secret / salt in production.
+_MIN_SECRET_LENGTH = 16
 
 
 class Settings(BaseSettings):
@@ -67,9 +76,13 @@ class Settings(BaseSettings):
     MAX_HISTORY_CHARS: int = 48_000
     MAX_LINKED_CONTEXT_BLOCKS: int = 4
     MAX_PERSONALIZATION_CHARS: int = 2_000
+    # Hard ceiling on inbound request body size (bytes) — rejected with 413 before
+    # JSON parsing so an oversized payload can't exhaust memory. Generous headroom
+    # over any real chat payload (server truncates history to MAX_HISTORY_CHARS).
+    MAX_REQUEST_BODY_BYTES: int = 5_000_000
 
     # -- Auth / cookies -----------------------------------------------------
-    JWT_SECRET_KEY: str = "dev-insecure-change-me"
+    JWT_SECRET_KEY: str = _DEV_JWT_SECRET
     JWT_ALGORITHM: str = "HS256"
     JWT_EXPIRE_MINUTES: int = 60
     AUTH_COOKIE_NAME: str = "branchchat_token"
@@ -77,7 +90,7 @@ class Settings(BaseSettings):
     COOKIE_SECURE: bool = False
     COOKIE_SAMESITE: Literal["lax", "strict", "none"] = "lax"
     COOKIE_DOMAIN: str | None = None
-    ANON_IDENTITY_SALT: str = "dev-insecure-anon-salt"
+    ANON_IDENTITY_SALT: str = _DEV_ANON_SALT
 
     # -- Login lockout ------------------------------------------------------
     LOGIN_MAX_FAILED: int = 5
@@ -128,6 +141,36 @@ class Settings(BaseSettings):
         if isinstance(v, str):
             return [item.strip() for item in v.split(",") if item.strip()]
         return v
+
+    @model_validator(mode="after")
+    def _forbid_insecure_secrets_in_production(self) -> "Settings":
+        """Refuse to boot production with the dev-default (or too-weak) secrets.
+
+        Runs at settings construction (i.e. at import/startup), so a misconfigured
+        deploy fails fast instead of silently serving forgeable JWTs and reversible
+        anon-identity hashes.
+        """
+        if not self.is_production:
+            return self
+        problems: list[str] = []
+        for name, dev_default in (
+            ("JWT_SECRET_KEY", _DEV_JWT_SECRET),
+            ("ANON_IDENTITY_SALT", _DEV_ANON_SALT),
+        ):
+            value = getattr(self, name)
+            if not value or value == dev_default:
+                problems.append(f"{name} is unset or still the insecure dev default")
+            elif len(value) < _MIN_SECRET_LENGTH:
+                problems.append(
+                    f"{name} must be at least {_MIN_SECRET_LENGTH} characters"
+                )
+        if problems:
+            raise ValueError(
+                "Refusing to start in production with insecure secrets: "
+                + "; ".join(problems)
+                + ". Set strong, unique values in the server environment."
+            )
+        return self
 
     @property
     def is_production(self) -> bool:

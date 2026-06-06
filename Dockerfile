@@ -14,6 +14,11 @@ COPY app ./app
 COPY alembic ./alembic
 COPY alembic.ini .
 
+# Drop root: run the app as an unprivileged user to limit blast radius of any RCE.
+RUN adduser --disabled-password --gecos "" --no-create-home appuser \
+    && chown -R appuser /app
+USER appuser
+
 EXPOSE 8000
 
 # Bind the platform-provided $PORT (Railway/Render set it); default 8000 locally.

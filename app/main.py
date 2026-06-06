@@ -1,7 +1,8 @@
 """FastAPI application factory and middleware wiring.
 
 Middleware order (outermost → innermost as a request travels in):
-    TrustedHost → CORS → global rate limit → origin check → security headers → app
+    TrustedHost → CORS → body-size limit → global rate limit → origin check
+    → security headers → app
 
 CORS sits outside the rate-limit/origin layers so preflight is always answered
 and CORS headers are present even on 4xx/5xx responses. ``allow_credentials`` is
@@ -17,6 +18,7 @@ from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from app.core.config import settings
@@ -30,6 +32,29 @@ from app.services import analytics
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("branchchat")
+
+
+class BodySizeLimitMiddleware(BaseHTTPMiddleware):
+    """Reject oversized request bodies early via a cheap Content-Length check, so a
+    huge payload can't exhaust memory during JSON parsing/validation. Sits just
+    inside CORS so the 413 still carries CORS headers and preflight is unaffected."""
+
+    async def dispatch(self, request: Request, call_next):
+        content_length = request.headers.get("content-length")
+        if content_length is not None:
+            try:
+                declared = int(content_length)
+            except ValueError:
+                return JSONResponse(
+                    {"detail": "Invalid request."},
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                )
+            if declared > settings.MAX_REQUEST_BODY_BYTES:
+                return JSONResponse(
+                    {"detail": "Request body too large."},
+                    status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                )
+        return await call_next(request)
 
 
 @asynccontextmanager
@@ -52,6 +77,7 @@ def create_app() -> FastAPI:
     app.add_middleware(SecurityHeadersMiddleware)
     app.add_middleware(OriginCheckMiddleware, allowed_origins=settings.CORS_ORIGINS)
     app.add_middleware(RateLimitMiddleware)
+    app.add_middleware(BodySizeLimitMiddleware)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.CORS_ORIGINS,

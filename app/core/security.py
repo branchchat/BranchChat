@@ -60,7 +60,12 @@ def create_access_token(subject: str) -> str:
 def decode_token(token: str) -> dict | None:
     try:
         return jwt.decode(
-            token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM]
+            token,
+            settings.JWT_SECRET_KEY,
+            algorithms=[settings.JWT_ALGORITHM],
+            # Defence in depth: reject tokens missing an expiry or subject even if
+            # they verify, and keep the algorithm allow-list explicit (no "none").
+            options={"require": ["exp", "sub"]},
         )
     except jwt.PyJWTError:
         return None

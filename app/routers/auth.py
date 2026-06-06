@@ -59,10 +59,15 @@ def _set_auth_cookie(response: Response, user_id: str) -> None:
 
 
 def _clear_auth_cookie(response: Response) -> None:
+    # Mirror the attributes the cookie was set with, otherwise some browsers
+    # won't treat this as the same cookie and won't clear it.
     response.delete_cookie(
         key=settings.AUTH_COOKIE_NAME,
         domain=settings.COOKIE_DOMAIN,
         path="/",
+        secure=settings.COOKIE_SECURE,
+        httponly=True,
+        samesite=settings.COOKIE_SAMESITE,
     )
 
 
