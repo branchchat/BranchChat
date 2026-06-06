@@ -4,8 +4,9 @@
 export const LEGAL = {
   product: "BranchChat",
   website: "branch-chat.com",
-  // TODO: your registered legal entity name, e.g. "BranchChat, Inc."
-  entity: "[Legal entity name]",
+  // Trading name. If/when you incorporate, switch to the full registered
+  // legal name (e.g. "BranchChat, Inc.").
+  entity: "BranchChat",
   // TODO: ensure this inbox exists and is monitored.
   contactEmail: "privacy@branch-chat.com",
   // TODO: governing-law jurisdiction, e.g. "the State of Delaware, USA".
