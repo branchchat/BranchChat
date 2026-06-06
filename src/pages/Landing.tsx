@@ -108,7 +108,7 @@ export function Landing() {
         </div>
       </section>
 
-      {/* live product preview — grows / branches as you scroll */}
+      {/* live product preview — a solid, advanced branching session */}
       <SampleChat />
 
       {/* ── Capabilities (hairline-divided row, reveal on scroll) ────────── */}
