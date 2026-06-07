@@ -1,16 +1,20 @@
 // Per-node UI on the canvas. A custom React Flow node that renders one
 // ChatNode from the store as a shadcn Card with a role badge and its content.
 //
-// Milestone 3 scope: render + selection highlight only. Node-level actions
-// (continue, branch, retry, tag, context handles) land in later milestones.
+// Renders + selection highlight, plus a retry action on errored assistant
+// nodes. Other node-level actions (continue, branch, tag, context handles)
+// land in later milestones.
 
 import { memo } from "react";
 import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
+import { RotateCcw } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { NODE_WIDTH } from "@/lib/treeLayout";
+import { useChatStore } from "@/store/chatStore";
 import type { ChatNode as ChatNodeType, ChatRole } from "@/types/chat";
 
 export type ChatNodeData = { node: ChatNodeType };
@@ -34,6 +38,7 @@ const ROLE_VARIANT: Record<
 function ChatNodeComponent({ data, selected }: NodeProps<ChatFlowNode>) {
   const { node } = data;
   const isRoot = node.parentId === null;
+  const retryAssistant = useChatStore((s) => s.retryAssistant);
 
   return (
     <Card
@@ -72,6 +77,24 @@ function ChatNodeComponent({ data, selected }: NodeProps<ChatFlowNode>) {
               <span className="text-muted-foreground italic">Empty</span>
             )}
           </p>
+        )}
+
+        {/* Re-request the reply for a failed assistant node (store clears the
+            error and flips it back to loading). `nodrag` keeps React Flow from
+            treating the click as a canvas/node drag. */}
+        {node.isError && !node.isLoading && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="nodrag mt-2 h-7 gap-1.5 px-2 text-xs"
+            onClick={(e) => {
+              e.stopPropagation();
+              retryAssistant(node.id);
+            }}
+          >
+            <RotateCcw className="size-3" />
+            Retry
+          </Button>
         )}
       </CardContent>
 
