@@ -85,3 +85,55 @@ export async function requestChatReply(
   const data = (await res.json()) as ChatResponse;
   return data.reply ?? "";
 }
+
+// ---------------------------------------------------------------------------
+// auth + usage (cookie-authenticated GETs; shapes from app/schemas/auth.py)
+// ---------------------------------------------------------------------------
+
+// Backend `UserOut`.
+export interface AuthUser {
+  id: string;
+  email: string;
+  email_verified: boolean;
+  created_at: string;
+}
+
+// Backend `UsageStatus`. `limit`/`used` are the backend's numbers — render
+// them directly so quota copy always matches the server (todo "make quota UI
+// copy match backend limits").
+export interface UsageStatus {
+  authenticated: boolean;
+  kind: string;
+  used: number;
+  limit: number;
+  remaining: number;
+}
+
+// GET /api/auth/me. Resolves null when not logged in — a 401 here is a normal
+// state (anonymous user), not an error.
+export async function fetchCurrentUser(
+  signal?: AbortSignal,
+): Promise<AuthUser | null> {
+  const res = await fetch(`${API_BASE}/api/auth/me`, {
+    credentials: "include",
+    signal,
+  });
+  if (res.status === 401) return null;
+  if (!res.ok) {
+    throw new ChatApiError(`Request failed (HTTP ${res.status}).`, res.status);
+  }
+  return (await res.json()) as AuthUser;
+}
+
+// GET /api/auth/usage — today's quota for the current identity (anon cookie
+// or session cookie; the backend decides which).
+export async function fetchUsage(signal?: AbortSignal): Promise<UsageStatus> {
+  const res = await fetch(`${API_BASE}/api/auth/usage`, {
+    credentials: "include",
+    signal,
+  });
+  if (!res.ok) {
+    throw new ChatApiError(`Request failed (HTTP ${res.status}).`, res.status);
+  }
+  return (await res.json()) as UsageStatus;
+}
