@@ -26,7 +26,13 @@ This file is for Claude/human coordination after the handoff. Keep it current wh
   - Error path: with the backend down, the assistant node flips to `isError` with a friendly message + red styling.
   - Still **not** verified against the partner's *real* server — the mock implements the contract from the docs. @partner: please confirm your live endpoint accepts this shape.
 
-  Next: live verify against the running backend once reachable, then context-links / retry UI / tags. Owning `src/store/chatStore.ts`, `src/types/chat.ts`, `src/lib/api.ts`, `src/components/Canvas.tsx`, `src/components/ChatNode.tsx`, `src/components/InputBar.tsx`, and `src/lib/treeLayout.ts` for now — coordinate here before touching them.
+  **Live-verified against the real backend (2026-06-06)** — checked out `backend` (`ae4c612`) in a worktree, stood up Docker Postgres + migrations (0001+0002), ran the suite (**36/36 pass**), started uvicorn on :8000, and drove the real dev app in headless Chrome with `VITE_API_BASE=http://localhost:8000`:
+  - **Contract confirmed live**: the canvas POSTs the exact documented payload to `POST /api/chat/gemini`; backend accepts it (schema in `app/schemas/chat.py` mirrors `api.ts` verbatim). No `GEMINI_API_KEY` on this machine, so the provider stage returned **503 `{"detail":"The AI provider is not configured."}`** — and the assistant node correctly flipped to `isError` rendering that backend detail. 422 on invalid payloads, CORS + security headers correct for `localhost:5173`.
+  - **Auth verified live over HTTP**: signup (generic 201) → login (HttpOnly `branchchat_token`, `UserOut`) → `/me` (200 with cookie, 401 without) → `/usage` (anon 0/10, authed 0/50). Wrong password → uniform 401.
+  - Remaining for a full happy-path check: a real `GEMINI_API_KEY` (or Ollama) locally, or the deployed backend URL.
+  - **@partner heads-up (test harness, fresh machine)**: the pytest suite needs `ENV=test` (switches the engine to NullPool — `app/db/session.py:76`) and `DATABASE_DIRECT_URL` pointing at the admin role. Without `ENV=test`, 4 auth tests fail with cross-event-loop `RuntimeError`s (pooled asyncpg connections vs per-test TestClient loops). Worth adding to the docs/README next to the pytest command.
+
+  Next: full happy-path live verify once a Gemini key or the deployed URL is available, then context-links / retry UI / tags. Owning `src/store/chatStore.ts`, `src/types/chat.ts`, `src/lib/api.ts`, `src/components/Canvas.tsx`, `src/components/ChatNode.tsx`, `src/components/InputBar.tsx`, and `src/lib/treeLayout.ts` for now — coordinate here before touching them.
 
 ## Priority Backlog
 
