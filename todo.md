@@ -34,7 +34,10 @@ This file is for Claude/human coordination after the handoff. Keep it current wh
 
   Next: full happy-path live verify once a Gemini key or the deployed URL is available, then context-links / retry UI / tags. Owning `src/store/chatStore.ts`, `src/types/chat.ts`, `src/lib/api.ts`, `src/components/Canvas.tsx`, `src/components/ChatNode.tsx`, `src/components/InputBar.tsx`, and `src/lib/treeLayout.ts` for now — coordinate here before touching them.
 
-  - **In progress (2026-06-06, branch `jayden/usage-meter-authstore`)**: `authStore` hydrated from `/api/auth/{me,usage}` + header usage meter (limits read from the backend response, not hardcoded).
+  - **In progress (2026-06-06, branch `jayden/usage-meter-authstore`)**: `authStore` hydrated from `/api/auth/{me,usage}` + header usage meter (limits read from the backend response, not hardcoded). **Live-verified** against the real backend in headless Chrome: anon meter `0/10`, after signup+login the header shows the email + `0/50`, and each chat round-trip re-fetches `/usage` (meter went 0→1 after a send). Dev note: open the app via `localhost:5173`, not `127.0.0.1:5173` — the `SameSite=lax` cookies don't flow between `127.0.0.1` and the `localhost:8000` API (different sites).
+  - **@partner (Roshaan), two observations from the live run** — both fine if intended, just confirming:
+    1. Quota is charged **before** the provider call (`app/routers/chat.py` docstring says this ordering is deliberate), so a 502/503 (provider down/unconfigured) still consumes a message. During a Gemini outage users' daily quota burns on failed sends — your call whether that's acceptable for beta or worth a refund-on-5xx.
+    2. `GET /api/auth/usage` always reports `kind: "standard"` — the separate coding-mode counter (10/day) isn't readable over the API yet, so the meter can't show it when coding mode lands. Additive field/param would do it.
 
 - **Roshaan (backend) — branch `backend`**: Scaffolding the FastAPI backend (`app/`) from scratch off `main`. Done so far:
   - Foundation: `app/core/config.py` (Pydantic settings), `app/db/session.py` (async engine, 10–20 pool, pooler-aware for Supabase, `rls_tx` GUC helper), security headers + CSRF origin-check middleware, layered rate limiter (Redis-ready interface).
