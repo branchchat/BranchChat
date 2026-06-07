@@ -137,3 +137,62 @@ export async function fetchUsage(signal?: AbortSignal): Promise<UsageStatus> {
   }
   return (await res.json()) as UsageStatus;
 }
+
+// POST JSON to an auth route. Non-2xx throws ChatApiError carrying the
+// backend's `detail` — user-facing copy by contract (e.g. the uniform
+// "Invalid email or password." 401, lockout 429s), so forms render it as-is.
+async function postAuth<T>(path: string, body: object): Promise<T> {
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}${path}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify(body),
+    });
+  } catch {
+    throw new ChatApiError(
+      "Could not reach the backend. Is it running and is VITE_API_BASE correct?",
+      0,
+    );
+  }
+  let data: unknown = null;
+  try {
+    data = await res.json();
+  } catch {
+    // Non-JSON body; handled below.
+  }
+  if (!res.ok) {
+    const detail = (data as { detail?: unknown } | null)?.detail;
+    throw new ChatApiError(
+      typeof detail === "string" && detail
+        ? detail
+        : `Request failed (HTTP ${res.status}).`,
+      res.status,
+    );
+  }
+  return data as T;
+}
+
+// POST /api/auth/signup → 201 generic message. Deliberately does NOT log in
+// (enumeration-safe); callers follow up with loginRequest.
+export async function signupRequest(
+  email: string,
+  password: string,
+): Promise<void> {
+  await postAuth("/api/auth/signup", { email, password });
+}
+
+// POST /api/auth/login → UserOut + HttpOnly session cookie. Wrong credentials
+// are a uniform 401 ChatApiError.
+export async function loginRequest(
+  email: string,
+  password: string,
+): Promise<AuthUser> {
+  return postAuth<AuthUser>("/api/auth/login", { email, password });
+}
+
+// POST /api/auth/logout → clears the session cookie.
+export async function logoutRequest(): Promise<void> {
+  await postAuth("/api/auth/logout", {});
+}
