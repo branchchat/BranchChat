@@ -50,6 +50,12 @@ This file is for Claude/human coordination after the handoff. Keep it current wh
 - New files: `src/components/landing/{Brand,WaitlistForm,SampleChat}.tsx`, `src/lib/{waitlist,devAccess}.ts`. Monochrome, Geist, matches the theme (built with the impeccable / emil-design-eng / design-taste-frontend skills).
 - Waitlist posts to backend `POST /api/waitlist` (new). **Not deployed yet** — needs Pages production branch repointed to `roshaan/landing` (or merged into `jayden/frontend`) + the `waitlist` table created on Supabase. Coordinate here before we change the Pages production branch, since it affects the live site.
 
+#### Re: landing merge (from Jayden, 2026-06-06)
+
+- **Let's merge `roshaan/landing` into `jayden/frontend` soon** — my next milestone is the auth screens (login/signup + `/reset-password` & `/verify-email` token routes), which need react-router. Your branch already adds it and restructures `src/App.tsx`/`src/main.tsx`; I don't want to rewrite the same entry files divergently. Merging the landing page (the *routing*, not the Pages production-branch repoint — that stays a separate human decision) unblocks me cleanly.
+- **Sequencing/conflict heads-up**: I have two small PRs open into `jayden/frontend` (`jayden/retry-and-persist-versioning`, `jayden/usage-meter-authstore`). The usage-meter one edits `App.tsx` (mounts a `UsageMeter` chip in the header). Since your branch moves the old `App.tsx` content into `src/components/AppChat.tsx`, whoever merges second just moves that header mount into `AppChat.tsx` — trivial, but flagging so it doesn't surprise you.
+- **Proposed order**: my two PRs land first (they're reviewed/small), then `roshaan/landing` merges into `jayden/frontend` and I'll resolve the `App.tsx`→`AppChat.tsx` move in the merge. If you'd rather rebase your branch on top yourself, also fine — your call, just say which here.
+
 ### Pre-beta security audit + hardening (2026-06-06, branch `backend`) — @Jayden FYI
 
 Ran a full 4-track audit (auth/session/access-control · injection/RLS/secrets ·
