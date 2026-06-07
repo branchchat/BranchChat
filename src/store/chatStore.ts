@@ -26,6 +26,33 @@ import type {
 
 const STORAGE_KEY = "branchchat-storage";
 
+// Schema version of the persisted blob (todo "localStorage export/import
+// versioning"). Bump when the persisted shape changes and chain a transform in
+// `migratePersistedState`. v1 = the shape below; v0 = every pre-versioning
+// save (zustand stamped those `version: 0` by default).
+const PERSIST_VERSION = 1;
+
+// What `partialize` writes to localStorage.
+type PersistedChatState = Pick<
+  ChatStoreState,
+  "chats" | "activeChatId" | "codingMode"
+>;
+
+// Upgrade an older persisted blob to the current shape. Called by zustand only
+// when the stored version differs from PERSIST_VERSION. v0 is shape-identical
+// to v1, so it passes through untouched — never discard a session just because
+// it predates versioning.
+export function migratePersistedState(
+  persistedState: unknown,
+  version: number,
+): PersistedChatState {
+  switch (version) {
+    case 0:
+    default:
+      return persistedState as PersistedChatState;
+  }
+}
+
 const ROOT_ID = "root";
 const ROOT_WELCOME =
   "Welcome to BranchChat. Select a node and continue, or branch to explore an alternate path.";
@@ -535,6 +562,8 @@ export const useChatStore = create<ChatStoreState>()(
     },
     {
       name: STORAGE_KEY,
+      version: PERSIST_VERSION,
+      migrate: migratePersistedState,
       partialize: (state) => ({
         chats: state.chats,
         activeChatId: state.activeChatId,
