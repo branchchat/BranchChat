@@ -83,7 +83,8 @@ function createNodeId(): string {
   return `node_${Date.now()}_${idCounter}`;
 }
 function createChatId(): string {
-  return `chat_${Date.now()}`;
+  idCounter += 1;
+  return `chat_${Date.now()}_${idCounter}`;
 }
 function createJournalId(): string {
   idCounter += 1;
@@ -265,6 +266,18 @@ export interface ChatStoreState {
   activeChatId: string;
   codingMode: boolean;
 
+  // --- chat (workspace tab) management, driven by the Toolbar ---
+  // Create a new empty chat and switch to it; returns the new chat id.
+  createChat: (opts?: { title?: string; workspace?: Workspace }) => string;
+  // Make `chatId` the active chat (no-op if it doesn't exist).
+  switchChat: (chatId: string) => void;
+  // Rename `chatId`; empty/whitespace titles are ignored.
+  renameChat: (chatId: string, title: string) => void;
+  // Delete `chatId`. If it was active, fall back to the most-recent remaining
+  // chat; deleting the last chat creates a fresh one so activeChatId always
+  // points at a real chat.
+  deleteChat: (chatId: string) => void;
+
   selectNode: (nodeId: string) => void;
 
   // Linear continuation: append a user message under `parentId` (defaults to
@@ -385,6 +398,59 @@ export const useChatStore = create<ChatStoreState>()(
         chats: { [initialChat.id]: initialChat },
         activeChatId: initialChat.id,
         codingMode: false,
+
+        createChat: (opts) => {
+          const chat = createInitialChat(
+            opts?.title ?? "New chat",
+            opts?.workspace ?? "personal",
+          );
+          set((state) => ({
+            chats: { ...state.chats, [chat.id]: chat },
+            activeChatId: chat.id,
+          }));
+          return chat.id;
+        },
+
+        switchChat: (chatId) =>
+          set((state) =>
+            state.chats[chatId] ? { activeChatId: chatId } : {},
+          ),
+
+        renameChat: (chatId, title) => {
+          const next = title.trim();
+          if (!next) return;
+          set((state) => {
+            const chat = state.chats[chatId];
+            if (!chat) return {};
+            return {
+              chats: {
+                ...state.chats,
+                [chatId]: { ...chat, title: next, updatedAt: Date.now() },
+              },
+            };
+          });
+        },
+
+        deleteChat: (chatId) =>
+          set((state) => {
+            if (!state.chats[chatId]) return {};
+            const chats = { ...state.chats };
+            delete chats[chatId];
+
+            // Never leave the app with zero chats / a dangling activeChatId.
+            if (Object.keys(chats).length === 0) {
+              const fresh = createInitialChat();
+              return { chats: { [fresh.id]: fresh }, activeChatId: fresh.id };
+            }
+            let activeChatId = state.activeChatId;
+            if (activeChatId === chatId) {
+              // Fall back to the most recently updated remaining chat.
+              activeChatId = Object.values(chats).sort(
+                (a, b) => b.updatedAt - a.updatedAt,
+              )[0].id;
+            }
+            return { chats, activeChatId };
+          }),
 
         selectNode: (nodeId) =>
           set((state) => {
