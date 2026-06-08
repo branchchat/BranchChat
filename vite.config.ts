@@ -13,9 +13,11 @@ export default defineConfig({
     },
   },
   test: {
-    // Pure-logic unit tests run in Node; DOM/component tests can opt into
-    // jsdom per-file later. The `@` alias above is reused by tests.
+    // Pure-logic unit tests run in Node (fast); DOM/component tests opt into
+    // jsdom per-file via a `// @vitest-environment jsdom` docblock. The `@`
+    // alias above is reused by tests.
     environment: "node",
     include: ["src/**/*.{test,spec}.{ts,tsx}"],
+    setupFiles: ["./vitest.setup.ts"],
   },
 })
