@@ -7,7 +7,7 @@
 // Milestone 3 scope: render + select. Nodes are auto-laid-out and not yet
 // draggable; continue/branch/context-link interactions come later.
 
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Background,
   Controls,
@@ -35,6 +35,10 @@ export function Canvas() {
   const focusNodeRequest = useChatStore((s) => s.focusNodeRequest);
   const clearFocusRequest = useChatStore((s) => s.clearFocusRequest);
   const rfRef = useRef<ReactFlowInstance<ChatFlowNode, Edge> | null>(null);
+  // Node to briefly pulse after a search-result open ({id, ts}); ts keys the
+  // animation so re-opening the same node replays it.
+  const [flash, setFlash] = useState<{ id: string; ts: number } | null>(null);
+  const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const { nodes, edges } = useMemo(() => {
     if (!chat) return { nodes: [] as ChatFlowNode[], edges: [] as Edge[] };
@@ -44,7 +48,10 @@ export function Canvas() {
       id: n.id,
       type: "chat",
       position: positions[n.id] ?? { x: 0, y: 0 },
-      data: { node: n },
+      data: {
+        node: n,
+        flashKey: flash && flash.id === n.id ? flash.ts : undefined,
+      },
       selected: n.id === chat.selectedNodeId,
     }));
 
@@ -57,15 +64,16 @@ export function Canvas() {
       }));
 
     return { nodes: flowNodes, edges: flowEdges };
-  }, [chat]);
+  }, [chat, flash]);
 
   const onNodeClick = useCallback(
     (_event: React.MouseEvent, node: FlowNode) => selectNode(node.id),
     [selectNode],
   );
 
-  // Center the canvas on a focus request (e.g. a clicked search result), then
-  // clear it so later re-renders (new messages, layout shifts) don't re-pan.
+  // Center the canvas on a focus request (e.g. a clicked search result) and
+  // pulse the node, then clear the request so later re-renders (new messages,
+  // layout shifts) don't re-pan.
   useEffect(() => {
     if (!focusNodeRequest || focusNodeRequest.chatId !== activeChatId) return;
     const target = nodes.find((n) => n.id === focusNodeRequest.nodeId);
@@ -75,8 +83,19 @@ export function Canvas() {
       target.position.y + NODE_HALF_HEIGHT,
       { zoom: 1, duration: 400 },
     );
+    setFlash({ id: focusNodeRequest.nodeId, ts: focusNodeRequest.ts });
+    if (flashTimer.current) clearTimeout(flashTimer.current);
+    flashTimer.current = setTimeout(() => setFlash(null), 1200);
     clearFocusRequest();
   }, [focusNodeRequest, activeChatId, nodes, clearFocusRequest]);
+
+  // Clear any pending flash timer on unmount.
+  useEffect(
+    () => () => {
+      if (flashTimer.current) clearTimeout(flashTimer.current);
+    },
+    [],
+  );
 
   if (!chat) return null;
 
