@@ -17,6 +17,7 @@ import {
   isBackendConfigured,
   requestChatReply,
 } from "@/lib/api";
+import { useAuthStore } from "@/store/authStore";
 import type {
   ChatNode,
   ChatSessionState,
@@ -371,6 +372,10 @@ export const useChatStore = create<ChatStoreState>()(
               ? err.message
               : "Something went wrong requesting the reply.";
           fillAssistant(chatId, assistantId, `⚠️ ${detail}`, true);
+        } finally {
+          // A reply consumed quota (and a 429 means the meter was stale) —
+          // re-sync the header meter. No-op in stub mode.
+          void useAuthStore.getState().refreshUsage();
         }
       };
 
