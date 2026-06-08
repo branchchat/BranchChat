@@ -261,10 +261,23 @@ export interface ExchangeResult {
   assistantId: string;
 }
 
+// A request to bring a node into view on the canvas. `ts` makes each request
+// unique so re-opening the same node re-triggers the focus. Transient — not
+// persisted (see partialize). Consumed and cleared by Canvas.tsx.
+export interface FocusNodeRequest {
+  chatId: string;
+  nodeId: string;
+  ts: number;
+}
+
 export interface ChatStoreState {
   chats: Record<string, ChatSessionState>;
   activeChatId: string;
   codingMode: boolean;
+
+  // Pending "center this node on the canvas" request (set by openNode, e.g.
+  // from search results); Canvas consumes it then calls clearFocusRequest.
+  focusNodeRequest: FocusNodeRequest | null;
 
   // --- chat (workspace tab) management, driven by the Toolbar ---
   // Create a new empty chat and switch to it; returns the new chat id.
@@ -277,6 +290,12 @@ export interface ChatStoreState {
   // chat; deleting the last chat creates a fresh one so activeChatId always
   // points at a real chat.
   deleteChat: (chatId: string) => void;
+
+  // Switch to `chatId`, select `nodeId` there, and request the canvas to center
+  // it. Used by search-result navigation. No-op if chat/node is missing.
+  openNode: (chatId: string, nodeId: string) => void;
+  // Canvas calls this once it has centered the requested node.
+  clearFocusRequest: () => void;
 
   selectNode: (nodeId: string) => void;
 
@@ -398,6 +417,7 @@ export const useChatStore = create<ChatStoreState>()(
         chats: { [initialChat.id]: initialChat },
         activeChatId: initialChat.id,
         codingMode: false,
+        focusNodeRequest: null,
 
         createChat: (opts) => {
           const chat = createInitialChat(
@@ -451,6 +471,28 @@ export const useChatStore = create<ChatStoreState>()(
             }
             return { chats, activeChatId };
           }),
+
+        openNode: (chatId, nodeId) =>
+          set((state) => {
+            const chat = state.chats[chatId];
+            if (!chat || !chat.nodes[nodeId]) return {};
+            return {
+              activeChatId: chatId,
+              // Note: no updatedAt bump — opening from search shouldn't
+              // reorder the chat list.
+              chats: {
+                ...state.chats,
+                [chatId]: {
+                  ...chat,
+                  selectedNodeId: nodeId,
+                  activePath: computeActivePath(chat.nodes, nodeId),
+                },
+              },
+              focusNodeRequest: { chatId, nodeId, ts: Date.now() },
+            };
+          }),
+
+        clearFocusRequest: () => set({ focusNodeRequest: null }),
 
         selectNode: (nodeId) =>
           set((state) => {

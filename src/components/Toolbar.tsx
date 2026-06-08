@@ -6,7 +6,7 @@
 // when hidden it renders nothing so the canvas gets the full width.
 
 import { useState } from "react";
-import { Pencil, Plus, Trash2 } from "lucide-react";
+import { Pencil, Plus, Search, Trash2, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -19,8 +19,27 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { cn, formatRelativeTime } from "@/lib/utils";
+import { searchChats, type SearchResult } from "@/lib/search";
 import { useChatStore } from "@/store/chatStore";
 import type { ChatSessionState, Workspace } from "@/types/chat";
+
+const ROLE_LABEL = { system: "System", user: "You", assistant: "Assistant" };
+
+// Render a snippet with the matched span highlighted (matchStart < 0 = the hit
+// was a branch label / tag, so show the snippet plain).
+function HighlightedSnippet({ result }: { result: SearchResult }) {
+  const { snippet, matchStart, matchLength } = result;
+  if (matchStart < 0) return <>{snippet}</>;
+  return (
+    <>
+      {snippet.slice(0, matchStart)}
+      <mark className="rounded-sm bg-amber-200 text-foreground dark:bg-amber-400/30">
+        {snippet.slice(matchStart, matchStart + matchLength)}
+      </mark>
+      {snippet.slice(matchStart + matchLength)}
+    </>
+  );
+}
 
 const WORKSPACE_LABELS: Record<string, string> = {
   personal: "Personal",
@@ -61,14 +80,18 @@ export function Toolbar() {
   const switchChat = useChatStore((s) => s.switchChat);
   const renameChat = useChatStore((s) => s.renameChat);
   const deleteChat = useChatStore((s) => s.deleteChat);
+  const openNode = useChatStore((s) => s.openNode);
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draftTitle, setDraftTitle] = useState("");
   const [pendingDelete, setPendingDelete] = useState<ChatSessionState | null>(
     null,
   );
+  const [query, setQuery] = useState("");
 
   const grouped = groupByWorkspace(Object.values(chats));
+  const searching = query.trim().length > 0;
+  const results = searching ? searchChats(chats, query) : [];
 
   const startRename = (chat: ChatSessionState) => {
     setEditingId(chat.id);
@@ -96,8 +119,58 @@ export function Toolbar() {
         </Button>
       </div>
 
+      <div className="relative px-2 pb-2">
+        <Search className="pointer-events-none absolute top-1/2 left-4 size-3.5 -translate-y-1/2 text-muted-foreground" />
+        <Input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search all chats…"
+          className="h-8 pr-7 pl-7 text-sm"
+        />
+        {searching && (
+          <button
+            type="button"
+            aria-label="Clear search"
+            className="absolute top-1/2 right-4 -translate-y-1/2 rounded p-0.5 text-muted-foreground hover:text-foreground"
+            onClick={() => setQuery("")}
+          >
+            <X className="size-3.5" />
+          </button>
+        )}
+      </div>
+
       <nav className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
-        {grouped.map(([workspace, list]) => (
+        {searching ? (
+          results.length === 0 ? (
+            <p className="px-2 py-4 text-center text-xs text-muted-foreground">
+              No matches for “{query.trim()}”.
+            </p>
+          ) : (
+            <ul className="flex flex-col gap-0.5">
+              {results.map((r) => (
+                <li key={`${r.chatId}:${r.nodeId}`}>
+                  <button
+                    type="button"
+                    className="flex w-full flex-col gap-0.5 rounded-md px-2 py-1.5 text-left hover:bg-muted/60"
+                    onClick={() => openNode(r.chatId, r.nodeId)}
+                  >
+                    <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                      <span className="truncate">{r.chatTitle}</span>
+                      <span aria-hidden>·</span>
+                      <span className="shrink-0">
+                        {r.branchLabel ?? ROLE_LABEL[r.role]}
+                      </span>
+                    </span>
+                    <span className="line-clamp-2 text-xs text-foreground">
+                      <HighlightedSnippet result={r} />
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )
+        ) : (
+          grouped.map(([workspace, list]) => (
           <div key={workspace} className="mb-3">
             <p className="px-2 py-1 text-[11px] font-medium text-muted-foreground">
               {workspaceLabel(workspace)}
@@ -165,7 +238,8 @@ export function Toolbar() {
               })}
             </ul>
           </div>
-        ))}
+          ))
+        )}
       </nav>
 
       <Dialog
