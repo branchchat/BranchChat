@@ -1,3 +1,4 @@
+import { AuthControls } from "@/components/AuthControls"
 import { Canvas } from "@/components/Canvas"
 import { InputBar } from "@/components/InputBar"
 import { UsageMeter } from "@/components/UsageMeter"
@@ -7,7 +8,10 @@ function App() {
     <div className="flex h-svh flex-col">
       <header className="flex h-12 shrink-0 items-center justify-between border-b px-4">
         <h1 className="text-sm font-semibold tracking-tight">BranchChat</h1>
-        <UsageMeter />
+        <div className="flex items-center gap-3">
+          <UsageMeter />
+          <AuthControls />
+        </div>
       </header>
       <main className="min-h-0 flex-1">
         <Canvas />

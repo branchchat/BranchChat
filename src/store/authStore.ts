@@ -16,6 +16,9 @@ import {
   fetchCurrentUser,
   fetchUsage,
   isBackendConfigured,
+  loginRequest,
+  logoutRequest,
+  signupRequest,
   type AuthUser,
   type UsageStatus,
 } from "@/lib/api";
@@ -28,11 +31,19 @@ export interface AuthStoreState {
 
   hydrate: () => Promise<void>;
   refreshUsage: () => Promise<void>;
+
+  // The three actions below throw ChatApiError with the backend's user-facing
+  // `detail` on failure — forms render err.message directly.
+  login: (email: string, password: string) => Promise<void>;
+  // Signup chains into login: the backend's 201 deliberately does NOT set a
+  // session cookie (enumeration-safe), so we log in right after.
+  signup: (email: string, password: string) => Promise<void>;
+  logout: () => Promise<void>;
 }
 
 let hydrating = false;
 
-export const useAuthStore = create<AuthStoreState>()((set) => ({
+export const useAuthStore = create<AuthStoreState>()((set, get) => ({
   user: null,
   usage: null,
   hydrated: false,
@@ -60,5 +71,26 @@ export const useAuthStore = create<AuthStoreState>()((set) => ({
     } catch {
       // Keep the last known value; the next round-trip refreshes again.
     }
+  },
+
+  login: async (email, password) => {
+    const user = await loginRequest(email, password);
+    // Fetch the new identity's quota BEFORE surfacing the user, then commit
+    // both in one set() — otherwise the header would show the email next to
+    // the stale anon limit for a frame until usage caught up.
+    const usage = await fetchUsage().catch(() => null);
+    set((s) => ({ user, usage: usage ?? s.usage, hydrated: true }));
+  },
+
+  signup: async (email, password) => {
+    await signupRequest(email, password);
+    await get().login(email, password);
+  },
+
+  logout: async () => {
+    await logoutRequest();
+    // Same single-commit pattern: drop the user and the anon quota together.
+    const usage = await fetchUsage().catch(() => null);
+    set((s) => ({ user: null, usage: usage ?? s.usage }));
   },
 }));
