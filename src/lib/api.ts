@@ -196,3 +196,45 @@ export async function loginRequest(
 export async function logoutRequest(): Promise<void> {
   await postAuth("/api/auth/logout", {});
 }
+
+// All four below return the backend's `{detail}` message (MessageOut) on
+// success; non-2xx throws ChatApiError with the detail (e.g. 400 invalid/used
+// token).
+
+// POST /api/auth/request-password-reset → always a generic 200 (enumeration-safe).
+export async function requestPasswordReset(email: string): Promise<string> {
+  const res = await postAuth<{ detail?: string }>(
+    "/api/auth/request-password-reset",
+    { email },
+  );
+  return res.detail ?? "If that email has an account, a reset link is on its way.";
+}
+
+// POST /api/auth/reset-password — token from the /reset-password URL + new password.
+export async function resetPassword(
+  token: string,
+  password: string,
+): Promise<string> {
+  const res = await postAuth<{ detail?: string }>("/api/auth/reset-password", {
+    token,
+    password,
+  });
+  return res.detail ?? "Your password has been reset. You can now log in.";
+}
+
+// POST /api/auth/verify-email — token from the /verify-email URL.
+export async function verifyEmail(token: string): Promise<string> {
+  const res = await postAuth<{ detail?: string }>("/api/auth/verify-email", {
+    token,
+  });
+  return res.detail ?? "Your email has been verified.";
+}
+
+// POST /api/auth/resend-verification (requires the session cookie).
+export async function resendVerification(): Promise<string> {
+  const res = await postAuth<{ detail?: string }>(
+    "/api/auth/resend-verification",
+    {},
+  );
+  return res.detail ?? "Verification email sent.";
+}

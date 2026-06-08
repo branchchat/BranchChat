@@ -18,10 +18,10 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ChatApiError } from "@/lib/api";
+import { ChatApiError, requestPasswordReset } from "@/lib/api";
 import { useAuthStore } from "@/store/authStore";
 
-type Mode = "signin" | "signup";
+type Mode = "signin" | "signup" | "reset";
 
 const COPY: Record<
   Mode,
@@ -39,6 +39,13 @@ const COPY: Record<
     submit: "Create account",
     busy: "Creating account…",
   },
+  reset: {
+    title: "Reset password",
+    description:
+      "Enter your email and we'll send a reset link if an account exists.",
+    submit: "Send reset link",
+    busy: "Sending…",
+  },
 };
 
 export function AuthDialog({
@@ -55,6 +62,8 @@ export function AuthDialog({
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  // Generic confirmation shown after a reset request (replaces the form).
+  const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   const copy = COPY[mode];
@@ -62,12 +71,14 @@ export function AuthDialog({
   const switchMode = (next: Mode) => {
     setMode(next);
     setError(null);
+    setNotice(null);
   };
 
   const close = (nextOpen: boolean) => {
     onOpenChange(nextOpen);
     if (!nextOpen) {
       setError(null);
+      setNotice(null);
       setPassword("");
     }
   };
@@ -78,8 +89,12 @@ export function AuthDialog({
     setBusy(true);
     setError(null);
     try {
-      await (mode === "signin" ? login : signup)(email.trim(), password);
-      close(false);
+      if (mode === "reset") {
+        setNotice(await requestPasswordReset(email.trim()));
+      } else {
+        await (mode === "signin" ? login : signup)(email.trim(), password);
+        close(false);
+      }
     } catch (err) {
       setError(
         err instanceof ChatApiError
@@ -99,55 +114,72 @@ export function AuthDialog({
           <DialogDescription>{copy.description}</DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={(e) => void submit(e)} className="grid gap-4">
-          <div className="grid gap-2">
-            <Label htmlFor="auth-email">Email</Label>
-            <Input
-              id="auth-email"
-              type="email"
-              autoComplete="email"
-              required
-              autoFocus
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-            />
-          </div>
+        {notice ? (
+          <p className="text-sm text-muted-foreground">{notice}</p>
+        ) : (
+          <form onSubmit={(e) => void submit(e)} className="grid gap-4">
+            <div className="grid gap-2">
+              <Label htmlFor="auth-email">Email</Label>
+              <Input
+                id="auth-email"
+                type="email"
+                autoComplete="email"
+                required
+                autoFocus
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+              />
+            </div>
 
-          <div className="grid gap-2">
-            <Label htmlFor="auth-password">Password</Label>
-            <Input
-              id="auth-password"
-              type="password"
-              autoComplete={
-                mode === "signup" ? "new-password" : "current-password"
-              }
-              required
-              // Display-only fast-fail; the backend enforces its own policy
-              // and its 422/detail would render below anyway.
-              minLength={mode === "signup" ? 12 : undefined}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
-            {mode === "signup" && (
-              <p className="text-xs text-muted-foreground">
-                At least 12 characters.
+            {mode !== "reset" && (
+              <div className="grid gap-2">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="auth-password">Password</Label>
+                  {mode === "signin" && (
+                    <button
+                      type="button"
+                      className="text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+                      onClick={() => switchMode("reset")}
+                    >
+                      Forgot password?
+                    </button>
+                  )}
+                </div>
+                <Input
+                  id="auth-password"
+                  type="password"
+                  autoComplete={
+                    mode === "signup" ? "new-password" : "current-password"
+                  }
+                  required
+                  // Display-only fast-fail; the backend enforces its own policy
+                  // and its 422/detail would render below anyway.
+                  minLength={mode === "signup" ? 12 : undefined}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                />
+                {mode === "signup" && (
+                  <p className="text-xs text-muted-foreground">
+                    At least 12 characters.
+                  </p>
+                )}
+              </div>
+            )}
+
+            {error && (
+              <p role="alert" className="text-sm text-destructive">
+                {error}
               </p>
             )}
-          </div>
 
-          {error && (
-            <p role="alert" className="text-sm text-destructive">
-              {error}
-            </p>
-          )}
-
-          <Button type="submit" disabled={busy}>
-            {busy ? copy.busy : copy.submit}
-          </Button>
-        </form>
+            <Button type="submit" disabled={busy}>
+              {busy ? copy.busy : copy.submit}
+            </Button>
+          </form>
+        )}
 
         <p className="text-center text-sm text-muted-foreground">
-          {mode === "signin" ? (
+          {mode === "signin" && (
             <>
               New here?{" "}
               <button
@@ -158,7 +190,8 @@ export function AuthDialog({
                 Create account
               </button>
             </>
-          ) : (
+          )}
+          {mode === "signup" && (
             <>
               Have an account?{" "}
               <button
@@ -169,6 +202,15 @@ export function AuthDialog({
                 Sign in
               </button>
             </>
+          )}
+          {mode === "reset" && (
+            <button
+              type="button"
+              className="font-medium text-foreground underline-offset-4 hover:underline"
+              onClick={() => switchMode("signin")}
+            >
+              Back to sign in
+            </button>
           )}
         </p>
       </DialogContent>
