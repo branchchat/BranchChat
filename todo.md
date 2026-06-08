@@ -34,6 +34,7 @@ This file is for Claude/human coordination after the handoff. Keep it current wh
 
   Next: full happy-path live verify once a Gemini key or the deployed URL is available, then context-links / retry UI / tags. Owning `src/store/chatStore.ts`, `src/types/chat.ts`, `src/lib/api.ts`, `src/components/Canvas.tsx`, `src/components/ChatNode.tsx`, `src/components/InputBar.tsx`, and `src/lib/treeLayout.ts` for now — coordinate here before touching them.
 
+  - **In progress (2026-06-06, branch `jayden/retry-and-persist-versioning`)**: retry button on `isError` nodes + localStorage persist versioning (v0 pass-through migrate).
   - **In progress (2026-06-06, branch `jayden/usage-meter-authstore`)**: `authStore` hydrated from `/api/auth/{me,usage}` + header usage meter (limits read from the backend response, not hardcoded). **Live-verified** against the real backend in headless Chrome: anon meter `0/10`, after signup+login the header shows the email + `0/50`, and each chat round-trip re-fetches `/usage` (meter went 0→1 after a send). Dev note: open the app via `localhost:5173`, not `127.0.0.1:5173` — the `SameSite=lax` cookies don't flow between `127.0.0.1` and the `localhost:8000` API (different sites).
   - **@partner (Roshaan), two observations from the live run** — both fine if intended, just confirming:
     1. Quota is charged **before** the provider call (`app/routers/chat.py` docstring says this ordering is deliberate), so a 502/503 (provider down/unconfigured) still consumes a message. During a Gemini outage users' daily quota burns on failed sends — your call whether that's acceptable for beta or worth a refund-on-5xx.
@@ -54,6 +55,12 @@ This file is for Claude/human coordination after the handoff. Keep it current wh
 - Added `react-router-dom`: `/` → new `src/pages/Landing.tsx`, `/app` → `src/pages/AppGate.tsx` (a soft dev passphrase gate, passphrase `letmebranch`, or `/app?key=letmebranch`) → renders `src/components/AppChat.tsx` (= your old App.tsx content). `src/App.tsx` + `src/main.tsx` now do routing; `public/_redirects` added for SPA deep-links.
 - New files: `src/components/landing/{Brand,WaitlistForm,SampleChat}.tsx`, `src/lib/{waitlist,devAccess}.ts`. Monochrome, Geist, matches the theme (built with the impeccable / emil-design-eng / design-taste-frontend skills).
 - Waitlist posts to backend `POST /api/waitlist` (new). **Not deployed yet** — needs Pages production branch repointed to `roshaan/landing` (or merged into `jayden/frontend`) + the `waitlist` table created on Supabase. Coordinate here before we change the Pages production branch, since it affects the live site.
+
+#### Re: landing merge (from Jayden, 2026-06-06)
+
+- **Let's merge `roshaan/landing` into `jayden/frontend` soon** — my next milestone is the auth screens (login/signup + `/reset-password` & `/verify-email` token routes), which need react-router. Your branch already adds it and restructures `src/App.tsx`/`src/main.tsx`; I don't want to rewrite the same entry files divergently. Merging the landing page (the *routing*, not the Pages production-branch repoint — that stays a separate human decision) unblocks me cleanly.
+- **Sequencing/conflict heads-up**: I have two small PRs open into `jayden/frontend` (`jayden/retry-and-persist-versioning`, `jayden/usage-meter-authstore`). The usage-meter one edits `App.tsx` (mounts a `UsageMeter` chip in the header). Since your branch moves the old `App.tsx` content into `src/components/AppChat.tsx`, whoever merges second just moves that header mount into `AppChat.tsx` — trivial, but flagging so it doesn't surprise you.
+- **Proposed order**: my two PRs land first (they're reviewed/small), then `roshaan/landing` merges into `jayden/frontend` and I'll resolve the `App.tsx`→`AppChat.tsx` move in the merge. If you'd rather rebase your branch on top yourself, also fine — your call, just say which here.
 
 ### Pre-beta security audit + hardening (2026-06-06, branch `backend`) — @Jayden FYI
 
