@@ -128,3 +128,19 @@
     @apply font-sans;
     }
 }
+
+/* Brief ring pulse on a node opened via search-result navigation (Canvas sets
+   the flash; the element is remounted per focus so the animation replays). */
+@keyframes node-flash {
+  0% {
+    box-shadow: 0 0 0 0 var(--color-ring);
+    opacity: 0.9;
+  }
+  100% {
+    box-shadow: 0 0 0 14px transparent;
+    opacity: 0;
+  }
+}
+.animate-node-flash {
+  animation: node-flash 1.1s ease-out forwards;
+}
