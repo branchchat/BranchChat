@@ -32,9 +32,8 @@ This file is for Claude/human coordination after the handoff. Keep it current wh
   - Remaining for a full happy-path check: a real `GEMINI_API_KEY` (or Ollama) locally, or the deployed backend URL.
   - **@partner heads-up (test harness, fresh machine)**: the pytest suite needs `ENV=test` (switches the engine to NullPool — `app/db/session.py:76`) and `DATABASE_DIRECT_URL` pointing at the admin role. Without `ENV=test`, 4 auth tests fail with cross-event-loop `RuntimeError`s (pooled asyncpg connections vs per-test TestClient loops). Worth adding to the docs/README next to the pytest command.
 
-  Next: jsdom test env → `migratePersistedState` + component/RTL tests; auth token routes (`/reset-password`, `/verify-email`, forgot-password) once `roshaan/landing` brings react-router; then context-links / tags. Full happy-path live verify still pending a Gemini key or the deployed URL. Owning `src/store/chatStore.ts`, `src/types/chat.ts`, `src/lib/{api,search,treeLayout,utils}.ts`, `src/store/authStore.ts`, `src/components/Canvas.tsx`, `src/components/ChatNode.tsx`, `src/components/InputBar.tsx`, `src/components/Toolbar.tsx`, and `src/components/{UsageMeter,AuthControls,AuthDialog}.tsx` for now — coordinate here before touching them.
+  Next: **blocked on `roshaan/landing` merge** — auth token routes (`/reset-password`, `/verify-email`, forgot-password) need react-router from that branch; @Roshaan also still owes a reply on the landing-merge proposal + the two quota questions below. Independent fill-in work meanwhile: more component/RTL tests (Toolbar search rendering, AuthDialog), then context-links / tags. Full happy-path live verify still pending a Gemini key or the deployed URL. Owning `src/store/chatStore.ts`, `src/types/chat.ts`, `src/lib/{api,search,treeLayout,utils}.ts`, `src/store/authStore.ts`, `src/components/Canvas.tsx`, `src/components/ChatNode.tsx`, `src/components/InputBar.tsx`, `src/components/Toolbar.tsx`, and `src/components/{UsageMeter,AuthControls,AuthDialog}.tsx` for now — coordinate here before touching them.
 
-  - **In progress (2026-06-07, branch `jayden/jsdom-tests`)**: jsdom test env (vitest setupFiles + jest-dom; per-file `// @vitest-environment jsdom`). Added `chatStore` tests (`migratePersistedState` v0/default passthrough; create/rename/delete invariants incl. last-chat recreate; `loadDemoChat`; `openNode`) and a `UsageMeter` RTL test (limits rendered verbatim, anon vs authed). 28 tests total, `npm audit` clean. Opens the door to broader component/RTL coverage (Toolbar search, AuthDialog) as future work.
   - **@partner (Roshaan), two open questions from the usage-meter live run** — both fine if intended, just confirming:
     1. Quota is charged **before** the provider call (`app/routers/chat.py` docstring says this ordering is deliberate), so a 502/503 (provider down/unconfigured) still consumes a message. During a Gemini outage users' daily quota burns on failed sends — your call whether that's acceptable for beta or worth a refund-on-5xx.
     2. `GET /api/auth/usage` always reports `kind: "standard"` — the separate coding-mode counter (10/day) isn't readable over the API yet, so the meter can't show it when coding mode lands. Additive field/param would do it.
@@ -201,12 +200,13 @@ source of truth for the tree.
 
 ### P2 - Testing
 
-- [ ] Add React Testing Library coverage for `Toolbar` search result rendering and `openNode` dispatch.
+- [ ] Add React Testing Library coverage for `Toolbar` search result rendering. (`openNode` dispatch is already unit-tested at the store level; jsdom env + a `UsageMeter` RTL test landed in #10 — this is the remaining component-rendering piece.)
 - [ ] Add browser/e2e smoke test: load demo, search phrase, click result, assert node is selected/centered.
 - [ ] Add backend contract tests for `/api/chat/gemini`, `/api/chat/summarize`, and `/api/share`.
 
 ## Recently Completed
 
+- [x] jsdom test env (vitest setupFiles + jest-dom; per-file `// @vitest-environment jsdom`) + store tests (`migratePersistedState`, create/rename/delete invariants, `loadDemoChat`, `openNode`) and a `UsageMeter` RTL test. 28 tests total. Merged (#10).
 - [x] Test harness: stood up vitest v4 (`test`/`test:watch` scripts; `npm audit` clean) + 17 unit tests for the pure helpers (`treeLayout`, `searchChats`, `formatRelativeTime`/`cn`). Merged (#9). _Note: the old backlog's "collision avoidance / coding-mode node sizes" layout cases are N/A — the rebuilt `treeLayout` is a plain tidy layout with no collision avoidance. Layout helpers were already a separate module (`src/lib/treeLayout.ts`), so that extraction item is moot too. `migratePersistedState` + component/RTL tests still need a jsdom env (follow-up)._
 - [x] Search-result navigation feedback: the opened node briefly pulses a ring (`node-flash` keyframe; Canvas flashes, ChatNode renders the overlay). Merged (#8).
 - [x] "Load demo conversation" Toolbar action (pure `src/lib/demoChat.ts` builder: a Kyoto-trip tree splitting into two labeled branches + a continuation). Reachable any time, not just first-run onboarding. Merged (#7).
