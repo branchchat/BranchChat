@@ -32,9 +32,8 @@ This file is for Claude/human coordination after the handoff. Keep it current wh
   - Remaining for a full happy-path check: a real `GEMINI_API_KEY` (or Ollama) locally, or the deployed backend URL.
   - **@partner heads-up (test harness, fresh machine)**: the pytest suite needs `ENV=test` (switches the engine to NullPool — `app/db/session.py:76`) and `DATABASE_DIRECT_URL` pointing at the admin role. Without `ENV=test`, 4 auth tests fail with cross-event-loop `RuntimeError`s (pooled asyncpg connections vs per-test TestClient loops). Worth adding to the docs/README next to the pytest command.
 
-  Next: search-result polish (selected-node pulse/toast); auth token routes (`/reset-password`, `/verify-email`, forgot-password) once `roshaan/landing` brings react-router; then context-links / tags. Full happy-path live verify still pending a Gemini key or the deployed URL. Owning `src/store/chatStore.ts`, `src/types/chat.ts`, `src/lib/{api,search,treeLayout,utils}.ts`, `src/store/authStore.ts`, `src/components/Canvas.tsx`, `src/components/ChatNode.tsx`, `src/components/InputBar.tsx`, `src/components/Toolbar.tsx`, and `src/components/{UsageMeter,AuthControls,AuthDialog}.tsx` for now — coordinate here before touching them.
+  Next: layout/helper tests (stand up vitest + `test` script; cover `treeLayout`, `searchChats`, `formatRelativeTime`, `migratePersistedState`); auth token routes (`/reset-password`, `/verify-email`, forgot-password) once `roshaan/landing` brings react-router; then context-links / tags. Full happy-path live verify still pending a Gemini key or the deployed URL. Owning `src/store/chatStore.ts`, `src/types/chat.ts`, `src/lib/{api,search,treeLayout,utils}.ts`, `src/store/authStore.ts`, `src/components/Canvas.tsx`, `src/components/ChatNode.tsx`, `src/components/InputBar.tsx`, `src/components/Toolbar.tsx`, and `src/components/{UsageMeter,AuthControls,AuthDialog}.tsx` for now — coordinate here before touching them.
 
-  - **In progress (2026-06-07, branch `jayden/search-pulse`)**: search-result navigation feedback — the opened node briefly pulses a ring (`focusNodeRequest` already centered it; Canvas now also flashes it, ChatNode renders the overlay, `node-flash` keyframe in `index.css`). Closes the P1 "clearer visual feedback after search result navigation" item. Live-verified in headless Chrome.
   - **@partner (Roshaan), two open questions from the usage-meter live run** — both fine if intended, just confirming:
     1. Quota is charged **before** the provider call (`app/routers/chat.py` docstring says this ordering is deliberate), so a 502/503 (provider down/unconfigured) still consumes a message. During a Gemini outage users' daily quota burns on failed sends — your call whether that's acceptable for beta or worth a refund-on-5xx.
     2. `GET /api/auth/usage` always reports `kind: "standard"` — the separate coding-mode counter (10/day) isn't readable over the API yet, so the meter can't show it when coding mode lands. Additive field/param would do it.
@@ -161,7 +160,6 @@ source of truth for the tree.
 
 ### P1 - UX Improvements
 
-- [ ] Add clearer visual feedback after search result navigation, such as a brief selected-node pulse or toast that says the matching node was opened.
 - [ ] Revisit zoom/readability: when viewing many nodes, consider a minimap/outline/sidebar preview instead of relying only on canvas zoom.
 - [ ] Improve mobile workspace browser density and ensure search result cards do not squeeze important context.
 - [ ] Add an "open selected branch in focused view" mode for long conversations where full-tree zoom makes text hard to read.
@@ -210,6 +208,7 @@ source of truth for the tree.
 
 ## Recently Completed
 
+- [x] Search-result navigation feedback: the opened node briefly pulses a ring (`node-flash` keyframe; Canvas flashes, ChatNode renders the overlay). Merged (#8).
 - [x] "Load demo conversation" Toolbar action (pure `src/lib/demoChat.ts` builder: a Kyoto-trip tree splitting into two labeled branches + a continuation). Reachable any time, not just first-run onboarding. Merged (#7).
 - [x] Toolbar sidebar: workspace-grouped chat browser + chat management (new/switch/rename/delete-with-confirm; store keeps `activeChatId` always valid). Toggleable from the header. Merged (#5).
 - [x] Cross-chat search with result navigation: pure `src/lib/search.ts` (content + branch-label + tag, windowed snippet), `openNode` + `focusNodeRequest` plumbing, Canvas centers the hit. Merged (#6). _Remaining search polish (selected-node pulse/toast, RTL + e2e tests) still in the backlog below._
