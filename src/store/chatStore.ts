@@ -18,6 +18,7 @@ import {
   requestChatReply,
 } from "@/lib/api";
 import { useAuthStore } from "@/store/authStore";
+import { buildDemoChat } from "@/lib/demoChat";
 import type {
   ChatNode,
   ChatSessionState,
@@ -282,6 +283,9 @@ export interface ChatStoreState {
   // --- chat (workspace tab) management, driven by the Toolbar ---
   // Create a new empty chat and switch to it; returns the new chat id.
   createChat: (opts?: { title?: string; workspace?: Workspace }) => string;
+  // Add a prebuilt sample branching conversation and switch to it; returns its
+  // id. Available any time (not just first-run onboarding).
+  loadDemoChat: () => string;
   // Make `chatId` the active chat (no-op if it doesn't exist).
   switchChat: (chatId: string) => void;
   // Rename `chatId`; empty/whitespace titles are ignored.
@@ -424,6 +428,19 @@ export const useChatStore = create<ChatStoreState>()(
             opts?.title ?? "New chat",
             opts?.workspace ?? "personal",
           );
+          set((state) => ({
+            chats: { ...state.chats, [chat.id]: chat },
+            activeChatId: chat.id,
+          }));
+          return chat.id;
+        },
+
+        loadDemoChat: () => {
+          const chat = buildDemoChat({
+            node: createNodeId,
+            chat: createChatId,
+            journal: createJournalId,
+          });
           set((state) => ({
             chats: { ...state.chats, [chat.id]: chat },
             activeChatId: chat.id,
