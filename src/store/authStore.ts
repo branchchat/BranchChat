@@ -75,9 +75,11 @@ export const useAuthStore = create<AuthStoreState>()((set, get) => ({
 
   login: async (email, password) => {
     const user = await loginRequest(email, password);
-    set({ user, hydrated: true });
-    // Identity changed (anon → user), so the quota numbers change too.
-    await get().refreshUsage();
+    // Fetch the new identity's quota BEFORE surfacing the user, then commit
+    // both in one set() — otherwise the header would show the email next to
+    // the stale anon limit for a frame until usage caught up.
+    const usage = await fetchUsage().catch(() => null);
+    set((s) => ({ user, usage: usage ?? s.usage, hydrated: true }));
   },
 
   signup: async (email, password) => {
@@ -87,8 +89,8 @@ export const useAuthStore = create<AuthStoreState>()((set, get) => ({
 
   logout: async () => {
     await logoutRequest();
-    set({ user: null });
-    // Back on the anon identity/quota.
-    await get().refreshUsage();
+    // Same single-commit pattern: drop the user and the anon quota together.
+    const usage = await fetchUsage().catch(() => null);
+    set((s) => ({ user: null, usage: usage ?? s.usage }));
   },
 }));
