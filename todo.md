@@ -32,12 +32,9 @@ This file is for Claude/human coordination after the handoff. Keep it current wh
   - Remaining for a full happy-path check: a real `GEMINI_API_KEY` (or Ollama) locally, or the deployed backend URL.
   - **@partner heads-up (test harness, fresh machine)**: the pytest suite needs `ENV=test` (switches the engine to NullPool — `app/db/session.py:76`) and `DATABASE_DIRECT_URL` pointing at the admin role. Without `ENV=test`, 4 auth tests fail with cross-event-loop `RuntimeError`s (pooled asyncpg connections vs per-test TestClient loops). Worth adding to the docs/README next to the pytest command.
 
-  Next: full happy-path live verify once a Gemini key or the deployed URL is available, then context-links / retry UI / tags. Owning `src/store/chatStore.ts`, `src/types/chat.ts`, `src/lib/api.ts`, `src/components/Canvas.tsx`, `src/components/ChatNode.tsx`, `src/components/InputBar.tsx`, and `src/lib/treeLayout.ts` for now — coordinate here before touching them.
+  Next: auth token routes (`/reset-password`, `/verify-email`, forgot-password) once `roshaan/landing` brings react-router; then context-links / tags. Full happy-path live verify still pending a Gemini key or the deployed URL. Owning `src/store/chatStore.ts`, `src/types/chat.ts`, `src/lib/api.ts`, `src/store/authStore.ts`, `src/components/Canvas.tsx`, `src/components/ChatNode.tsx`, `src/components/InputBar.tsx`, `src/components/{UsageMeter,AuthControls,AuthDialog}.tsx`, and `src/lib/treeLayout.ts` for now — coordinate here before touching them.
 
-  - **In progress (2026-06-06, branch `jayden/retry-and-persist-versioning`)**: retry button on `isError` nodes + localStorage persist versioning (v0 pass-through migrate).
-  - **In progress (2026-06-06, branch `jayden/usage-meter-authstore`)**: `authStore` hydrated from `/api/auth/{me,usage}` + header usage meter (limits read from the backend response, not hardcoded). **Live-verified** against the real backend in headless Chrome: anon meter `0/10`, after signup+login the header shows the email + `0/50`, and each chat round-trip re-fetches `/usage` (meter went 0→1 after a send). Dev note: open the app via `localhost:5173`, not `127.0.0.1:5173` — the `SameSite=lax` cookies don't flow between `127.0.0.1` and the `localhost:8000` API (different sites).
-  - **In progress (2026-06-06, branch `jayden/auth-screens`, stacked on `jayden/usage-meter-authstore`)**: modal-based signup/login/logout (header dialog wired to `authStore`) — deliberately router-free so it doesn't collide with `roshaan/landing`'s react-router restructure. The `/reset-password` + `/verify-email` token routes (and "forgot password") follow in a separate PR after the landing merge.
-  - **@partner (Roshaan), two observations from the live run** — both fine if intended, just confirming:
+  - **@partner (Roshaan), two open questions from the usage-meter live run** — both fine if intended, just confirming:
     1. Quota is charged **before** the provider call (`app/routers/chat.py` docstring says this ordering is deliberate), so a 502/503 (provider down/unconfigured) still consumes a message. During a Gemini outage users' daily quota burns on failed sends — your call whether that's acceptable for beta or worth a refund-on-5xx.
     2. `GET /api/auth/usage` always reports `kind: "standard"` — the separate coding-mode counter (10/day) isn't readable over the API yet, so the meter can't show it when coding mode lands. Additive field/param would do it.
 
@@ -213,6 +210,10 @@ source of truth for the tree.
 
 ## Recently Completed
 
+- [x] Retry button on errored assistant nodes (re-requests the reply via `retryAssistant`). Merged to `jayden/frontend` (#1).
+- [x] localStorage persist versioning (`version: 1` + `migrate`; pre-versioning saves pass through as v0, none discarded). Merged (#1).
+- [x] `authStore` + header usage meter, driven live by `/api/auth/{me,usage}` (limits read from the backend, never hardcoded; refreshes after each chat round-trip). Merged (#2).
+- [x] Modal sign-in / create-account / sign-out (router-free, wired to `authStore`; backend `detail` surfaced on errors). Merged (#4, replacing auto-closed #3).
 - [x] Gemini upstream 504/fallback handling improved.
 - [x] New branches stay centered when room exists and avoid existing node collisions when needed.
 - [x] Duplicate broad auth middleware rate limit removed; route-specific auth limits remain.
