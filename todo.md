@@ -149,6 +149,35 @@ source of truth for the tree.
   info in the chat response if you'd rather show exact numbers than a char estimate.
   Say the word and I'll add it to the response (additive, non-breaking).
 
+- **Roshaan (backend + landing) — branch `roshaan/landing`** — @Jayden's Claude, please read:
+
+  **The whole product is LIVE in production.** 🎉
+  - **Backend**: built + deployed on **Railway at https://api.branch-chat.com** (FastAPI, Docker). DB on **Supabase** (Postgres + RLS, via least-priv `app_user` over the transaction pooler). Endpoints: `/api/chat/{gemini,ollama}` (Gemini + fallback), full **auth** (`/api/auth/*`: signup/login/logout/me/usage/reset/verify — argon2, JWT cookie, lockout, enumeration-safe), **daily quotas**, share schema, **`POST /api/waitlist`**. **Your `src/lib/api.ts` contract is CORRECT and live — change nothing.** Keep `credentials: 'include'`.
+  - **Frontend**: I built a **landing page + waitlist** on this branch (`roshaan/landing`, off your `jayden/frontend`). **Your chat is UNTOUCHED** — I only re-routed it. Added `react-router-dom` + `motion`: `/` = landing, `/app` = your real chat behind a **soft dev passphrase gate** (`letmebranch`, or `/app?key=letmebranch`). New files are all mine: `src/pages/{Landing,AppGate}.tsx`, `src/components/AppChat.tsx` (= your old App.tsx content), `src/components/landing/*`, `src/lib/{waitlist,devAccess}.ts`; `App.tsx`/`main.tsx` now route; `public/_redirects` for SPA. Built with design skills (impeccable / emil-design-eng / design-taste-frontend / ui-ux-pro-max); monochrome + Geist, animated.
+
+  **⚠️ What changed that affects YOU:**
+  1. **Cloudflare Pages production branch is now `roshaan/landing`, NOT `jayden/frontend`.** So pushing to `jayden/frontend` no longer deploys to **branch-chat.com**. (Live site = this branch.)
+  2. **To ship your chat work to production:** keep building on `jayden/frontend` as normal, then when ready **merge `jayden/frontend` → `roshaan/landing`** (coordinate here first). The gated `/app` route renders YOUR `Canvas`/`ChatNode`/`InputBar`/`chatStore`, so merging brings your improvements (Outline/Connections/Reading, tags, compare, share) straight to the live `/app`. Or we agree to make this the trunk / merge both to `main`.
+  3. **Don't rename/move** `src/components/{Canvas,ChatNode,InputBar}.tsx` or the store — `AppChat.tsx` imports them. Don't change the `api.ts` request/response shape (backend depends on it).
+  4. **Run locally:** `npm run dev`, set `VITE_API_BASE=https://api.branch-chat.com` (or `http://localhost:8000` with the backend running) — chat now gets REAL Gemini replies. Dev gate passphrase: `letmebranch`.
+  5. Backend CORS currently allows `branch-chat.com` + `www.branch-chat.com` only. If you serve from another origin, tell me and I'll allowlist it.
+
+- **Pre-beta security audit done (2026-06-06) — no frontend action needed.** I ran a full backend audit (auth/RLS/injection/secrets/config/rate-limit/headers/deps) and pushed hardening to the `backend` branch (prod-secret boot guard, request body-size cap, cookie/JWT fixes, non-root container). **Frontend verdict: clean** — zero XSS sinks, `npm audit` = 0, no client-shipped secrets, and the `letmebranch` dev gate is correctly a *soft* gate (real protection is the cookie auth + server quotas, not the passphrase). Your `api.ts` contract is unchanged. Details: `docs/backend-security.md` on the `backend` branch.
+
+- **Analytics + legal layer (2026-06-06) — branch `roshaan/landing` (Roshaan) — @Jayden's Claude, FYI (now DONE):**
+
+  **PostHog is now live on the frontend** (set up via `npx @posthog/wizard` on `roshaan/landing`). Wired in `src/main.tsx` (`posthog.init` + `PostHogProvider`); keys in gitignored `.env` (`VITE_PUBLIC_POSTHOG_KEY` / `VITE_PUBLIC_POSTHOG_HOST`, US cloud), documented in `.env.example`. **"Detailed" mode is on: autocapture, pageviews, AND session replay/heatmaps.** SPA pageviews are automatic via `defaults: '2026-01-30'` (`capture_pageview: 'history_change'`) — do **NOT** add manual react-router pageview capture or pageviews will double-count.
+
+  **Cookie/privacy compliance — DONE (Roshaan, 2026-06-06), committed on `roshaan/landing`:**
+  - [x] **Cookie consent banner** (`src/components/CookieConsent.tsx`) gates PostHog. `main.tsx` now inits with `opt_out_capturing_by_default: true`; Accept → `opt_in_capturing()`, Decline → `opt_out_capturing()`. Choice persists (`src/lib/consent.ts`); footer **"Cookie settings"** re-opens it to withdraw consent. **Verified: pre-consent only config/flags load — no `/e/` events, no `/s/` recording; after Accept, capture starts.**
+  - [x] **Privacy Policy** (`src/pages/Privacy.tsx`, `/privacy`) + **Terms** (`src/pages/Terms.tsx`, `/terms`) via shared `src/components/legal/LegalLayout.tsx`; linked from landing + legal footers.
+  - [x] **Session-replay PII masking** — per-route `.ph-mask` on `/app` (chat text + inputs censored; landing visible). **Leave intact** — the consent gate composes with this.
+  - [x] Routes registered in `App.tsx`; `<CookieConsent />` mounted globally.
+  - [x] **Production wired (2026-06-06):** added `VITE_PUBLIC_POSTHOG_KEY` + `VITE_PUBLIC_POSTHOG_HOST` to Cloudflare Pages env (they were missing — PostHog wasn't actually running in prod before) and redeployed. **Reverse proxy live:** prod routes PostHog through `https://t.branch-chat.com` (PostHog Managed proxy + a `t` CNAME in Cloudflare, gray-cloud / DNS-only). Verified on live branch-chat.com — config loads via the proxy, consent-gated.
+  - [ ] **Data-deletion path** (PostHog per-person deletion via API) — not wired yet; low priority during early beta.
+
+  ⚠️ **HUMAN TODO before launch (not code):** `src/lib/legal.ts` now has real values — `entity` = "BranchChat", `jurisdiction` = New Jersey, `contactEmail` = `branchchat@gmail.com`. The policy/ToS copy is still a *template draft* — have the wording reviewed by a lawyer or a service (Termly/iubenda) before relying on it. Not legally certified.
+
 ## Priority Backlog
 
 ### P0 - Keep The App Stable
@@ -163,6 +192,35 @@ source of truth for the tree.
 - [ ] Revisit zoom/readability: when viewing many nodes, consider a minimap/outline/sidebar preview instead of relying only on canvas zoom.
 - [ ] Improve mobile workspace browser density and ensure search result cards do not squeeze important context.
 - [ ] Add an "open selected branch in focused view" mode for long conversations where full-tree zoom makes text hard to read.
+
+### P1 - Social pipeline UI screenshots (@Jayden's Claude — please action)
+
+Roshaan set up an automated social-media content pipeline. A snapshot is now on
+the **`roshaan/social-pipeline`** branch (pushed for your review with `[skip ci]`,
+so it does **not** deploy). Get it without disturbing your branch:
+`git fetch origin && git worktree add ../social-pipeline-review roshaan/social-pipeline`
+(files land in `../social-pipeline-review/social-pipeline/`). The live working
+copy still lives locally on Roshaan's machine.
+Text/hook posts auto-generate branded cards, but "show the product" posts need
+**real UI screenshots**, and a good shot needs a populated canvas — which is your
+area. Please capture a small starter set:
+
+- [ ] **Canvas with a real branching conversation** (several nodes, ≥1 visible fork) — the hero shot
+- [ ] **Branch-compare view** (two endpoints side by side)
+- [ ] **A node with tags/comments or context links**
+- [ ] **Zoomed-out full tree** showing the scale of an exploration
+- [ ] (optional) replay/history or any feature worth highlighting
+
+Details / naming convention / where they're used: see
+`social-pipeline/assets/ui/README.md`. **Drop the PNGs into
+`social-pipeline/assets/ui/`** with descriptive filenames (e.g.
+`canvas-branching.png`), then **commit + push them back to
+`roshaan/social-pipeline`** (keep `[skip ci]` in the message) so Roshaan can pull
+them into the pipeline. Light mode preferred (matches the cards); retina/2x if
+possible; use believable research content, nothing sensitive. The pipeline
+auto-rotates whatever is in that folder; until shots exist it falls back to
+generated cards. Tip: the P1 "Load demo conversation" item below would make
+capturing these trivial.
 
 ### P1 - Tree Layout And Canvas
 
