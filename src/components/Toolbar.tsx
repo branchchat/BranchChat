@@ -6,7 +6,7 @@
 // when hidden it renders nothing so the canvas gets the full width.
 
 import { useState } from "react";
-import { Pencil, Plus, Search, Trash2, X } from "lucide-react";
+import { Pencil, Plus, Search, Sparkles, Trash2, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -77,6 +77,7 @@ export function Toolbar() {
   const chats = useChatStore((s) => s.chats);
   const activeChatId = useChatStore((s) => s.activeChatId);
   const createChat = useChatStore((s) => s.createChat);
+  const loadDemoChat = useChatStore((s) => s.loadDemoChat);
   const switchChat = useChatStore((s) => s.switchChat);
   const renameChat = useChatStore((s) => s.renameChat);
   const deleteChat = useChatStore((s) => s.deleteChat);
@@ -241,6 +242,18 @@ export function Toolbar() {
           ))
         )}
       </nav>
+
+      <div className="border-t p-2">
+        <Button
+          variant="ghost"
+          size="sm"
+          className="w-full justify-start gap-2 text-xs text-muted-foreground"
+          onClick={() => loadDemoChat()}
+        >
+          <Sparkles className="size-3.5" />
+          Load demo conversation
+        </Button>
+      </div>
 
       <Dialog
         open={pendingDelete !== null}
