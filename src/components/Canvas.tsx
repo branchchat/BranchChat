@@ -7,7 +7,7 @@
 // Milestone 3 scope: render + select. Nodes are auto-laid-out and not yet
 // draggable; continue/branch/context-link interactions come later.
 
-import { useCallback, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import {
   Background,
   Controls,
@@ -15,18 +15,26 @@ import {
   ReactFlow,
   type Edge,
   type Node as FlowNode,
+  type ReactFlowInstance,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 
 import { useChatStore } from "@/store/chatStore";
-import { computeTreeLayout } from "@/lib/treeLayout";
+import { computeTreeLayout, NODE_WIDTH } from "@/lib/treeLayout";
 import { ChatNode, type ChatFlowNode } from "@/components/ChatNode";
 
 const nodeTypes = { chat: ChatNode };
 
+// Nominal half-height for centering math (real heights vary with content).
+const NODE_HALF_HEIGHT = 60;
+
 export function Canvas() {
   const chat = useChatStore((s) => s.chats[s.activeChatId]);
+  const activeChatId = useChatStore((s) => s.activeChatId);
   const selectNode = useChatStore((s) => s.selectNode);
+  const focusNodeRequest = useChatStore((s) => s.focusNodeRequest);
+  const clearFocusRequest = useChatStore((s) => s.clearFocusRequest);
+  const rfRef = useRef<ReactFlowInstance<ChatFlowNode, Edge> | null>(null);
 
   const { nodes, edges } = useMemo(() => {
     if (!chat) return { nodes: [] as ChatFlowNode[], edges: [] as Edge[] };
@@ -56,6 +64,20 @@ export function Canvas() {
     [selectNode],
   );
 
+  // Center the canvas on a focus request (e.g. a clicked search result), then
+  // clear it so later re-renders (new messages, layout shifts) don't re-pan.
+  useEffect(() => {
+    if (!focusNodeRequest || focusNodeRequest.chatId !== activeChatId) return;
+    const target = nodes.find((n) => n.id === focusNodeRequest.nodeId);
+    if (!target || !rfRef.current) return;
+    rfRef.current.setCenter(
+      target.position.x + NODE_WIDTH / 2,
+      target.position.y + NODE_HALF_HEIGHT,
+      { zoom: 1, duration: 400 },
+    );
+    clearFocusRequest();
+  }, [focusNodeRequest, activeChatId, nodes, clearFocusRequest]);
+
   if (!chat) return null;
 
   return (
@@ -63,6 +85,7 @@ export function Canvas() {
       nodes={nodes}
       edges={edges}
       nodeTypes={nodeTypes}
+      onInit={(instance) => (rfRef.current = instance)}
       onNodeClick={onNodeClick}
       nodesDraggable={false}
       nodesConnectable={false}
