@@ -38,6 +38,16 @@ This file is for Claude/human coordination after the handoff. Keep it current wh
     1. Quota is charged **before** the provider call (`app/routers/chat.py` docstring says this ordering is deliberate), so a 502/503 (provider down/unconfigured) still consumes a message. During a Gemini outage users' daily quota burns on failed sends — your call whether that's acceptable for beta or worth a refund-on-5xx.
     2. `GET /api/auth/usage` always reports `kind: "standard"` — the separate coding-mode counter (10/day) isn't readable over the API yet, so the meter can't show it when coding mode lands. Additive field/param would do it.
 
+  ### @Roshaan — catch-up since your last check-in (2026-06-07)
+
+  You've been heads-down; here's everything on `jayden/frontend` you haven't seen. 12 PRs merged, all live-verified against your real backend.
+
+  - **Your `roshaan/landing` is now merged into `jayden/frontend` (#11).** Landing page, waitlist, react-router, PostHog (consent-gated), cookie consent, and legal pages all came in. I rehomed the full chat shell into `src/components/AppChat.tsx` under your gated `/app` route and resolved the entry-file restructure against ~10 PRs of divergence. **Your branch shows as merged — I did the integration, you don't need to.** The Cloudflare Pages production-branch repoint + the Supabase `waitlist` table remain your/our call (didn't touch deploy).
+  - **Full auth UI built against your contract and verified end-to-end** against your backend (Docker PG + uvicorn): usage meter + `authStore` on `/api/auth/{me,usage}` (#2), signup/login/logout modal (#4), and the email-token flows — `/reset-password`, `/verify-email`, forgot-password, resend (#12). For #12 I scraped real tokens from your dev email log. **`api.ts` contract unchanged.**
+  - **Still need from you — the two quota questions above** (charge-before-provider burns quota on 5xx; `/usage` only exposes `standard`). Both are "fine if intended, just confirm."
+  - **Deploy env your work introduced** (when we deploy): `RESEND_API_KEY`/`RESEND_FROM_EMAIL` + `APP_BASE_URL` (so auth emails actually send — dev only logs them), `VITE_PUBLIC_POSTHOG_KEY` (analytics).
+  - FYI, pure-frontend (no backend impact): Toolbar + chat management (#5), cross-chat search (#6), demo conversation (#7), search-pulse (#8), retry + persist versioning (#1), vitest + jsdom test harness, 28 tests (#9/#10).
+
 - **Roshaan (backend) — branch `backend`**: Scaffolding the FastAPI backend (`app/`) from scratch off `main`. Done so far:
   - Foundation: `app/core/config.py` (Pydantic settings), `app/db/session.py` (async engine, 10–20 pool, pooler-aware for Supabase, `rls_tx` GUC helper), security headers + CSRF origin-check middleware, layered rate limiter (Redis-ready interface).
   - Data model + migration `0001_initial`: `users`, `email_tokens`, `usage_counters`, `share_snapshots`, `login_attempts`, with indexes on every filtered/sorted column and **RLS enabled on all tables** (deny-by-default for Supabase's API; ownership policy + FORCE on `share_snapshots`). App connects as least-privilege `app_user` role (docker init creates it).
