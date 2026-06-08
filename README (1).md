@@ -251,6 +251,8 @@ The **shipping frontend does not depend on this**; it keeps the tree locally and
 | `/upgrade` | Upgrade / limits messaging |
 | `/analytics` | Traffic analytics dashboard (backend-fed) |
 | `/shared/:token` | Read-only shared branch viewer |
+| `/privacy` | Privacy Policy page |
+| `/terms` | Terms of Service page |
 
 ### State stores
 
@@ -270,6 +272,15 @@ The **shipping frontend does not depend on this**; it keeps the tree locally and
 - **`BranchCompare.tsx`**: Side-by-side branch diff when compare mode active.
 - **`ResearchJournal.tsx`**: Timeline of branch/tag/compare/note events.
 - **`RichText.tsx`**: Markdown + math (KaTeX) rendering for assistant content.
+
+### Analytics & privacy (PostHog)
+
+- **PostHog** product analytics + session replay, initialized in `src/main.tsx`. Keys come from `VITE_PUBLIC_POSTHOG_KEY` / `VITE_PUBLIC_POSTHOG_HOST` (US cloud).
+- **Consent-gated**: PostHog inits with `opt_out_capturing_by_default: true`, so nothing is captured or recorded until the visitor accepts in the cookie banner (`src/components/CookieConsent.tsx`). The choice persists in `localStorage` (`src/lib/consent.ts`); the footer "Cookie settings" link re-opens the banner so consent can be withdrawn.
+- **SPA pageviews** are automatic via `defaults: '2026-01-30'` (`capture_pageview: 'history_change'`) — do **not** add manual react-router pageview capture (it double-counts).
+- **Per-route session-replay masking**: the `/app` chat workspace is wrapped in `.ph-mask` (`AppChat.tsx`); `main.tsx` masks all text + input values inside it, so conversation content is never recorded, while the public landing stays visible. Project-level masking baseline = "mask only passwords".
+- **Legal pages**: `/privacy` + `/terms` (`src/pages/Privacy.tsx`, `Terms.tsx`) share `src/components/legal/LegalLayout.tsx`; company/contact/jurisdiction constants live in `src/lib/legal.ts`. Copy is a template draft — have it reviewed before launch.
+- **Reverse proxy**: in production PostHog is routed through `https://t.branch-chat.com` (PostHog Managed reverse proxy + a `t` CNAME in Cloudflare DNS, gray-cloud / DNS-only) to dodge ad-blockers. Set `VITE_PUBLIC_POSTHOG_HOST` to the proxy in prod, or `https://us.i.posthog.com` for direct.
 
 ### Continuing vs branching (implementation)
 
@@ -341,6 +352,8 @@ See [`.env.example`](.env.example). Critical groups:
 - `VITE_API_BASE` — backend origin (e.g. `http://localhost:8000`)
 - `VITE_PROVIDER` — `gemini` or `ollama`
 - `VITE_*_DAILY_MESSAGE_LIMIT` — display mirrors for UI copy
+- `VITE_PUBLIC_POSTHOG_KEY` — PostHog public project key (client-side; safe to expose)
+- `VITE_PUBLIC_POSTHOG_HOST` — PostHog host; reverse proxy `https://t.branch-chat.com` in prod, `https://us.i.posthog.com` direct
 
 API keys **never** appear in frontend env; only the backend calls Gemini/Ollama.
 
@@ -435,9 +448,13 @@ ENABLE_LEGACY_TREE_API=false
 ### Cloudflare Pages frontend env
 
 ```sh
-VITE_API_BASE=https://your-railway-backend.up.railway.app
+VITE_API_BASE=https://api.branch-chat.com
 VITE_PROVIDER=gemini
+VITE_PUBLIC_POSTHOG_KEY=phc_...                       # PostHog public project key
+VITE_PUBLIC_POSTHOG_HOST=https://t.branch-chat.com   # reverse proxy (ad-blocker resistant)
 ```
+
+> Set these in **Cloudflare Pages → Settings → Variables and Secrets** (they are build-time, baked into the bundle). After changing them, retry the latest deployment so the new values take effect.
 
 ---
 
