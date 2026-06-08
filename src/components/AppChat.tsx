@@ -15,6 +15,7 @@ import { Canvas } from "@/components/Canvas"
 import { InputBar } from "@/components/InputBar"
 import { Toolbar } from "@/components/Toolbar"
 import { UsageMeter } from "@/components/UsageMeter"
+import { VerifyEmailBanner } from "@/components/VerifyEmailBanner"
 import { Button } from "@/components/ui/button"
 
 export function AppChat() {
@@ -46,6 +47,7 @@ export function AppChat() {
           </Link>
         </div>
       </header>
+      <VerifyEmailBanner />
       <div className="flex min-h-0 flex-1">
         {sidebarOpen && <Toolbar />}
         <div className="flex min-w-0 flex-1 flex-col">
