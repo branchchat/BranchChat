@@ -120,3 +120,67 @@ async def get_status(
     )
     used = result.scalar_one_or_none() or 0
     return used, limit
+
+
+async def get_coding_status(
+    session: AsyncSession, *, user_id: str | None, anon_id: str
+) -> tuple[int, int]:
+    """Return ``(used, limit)`` for the caller's coding-mode daily bucket today."""
+    if user_id is not None:
+        identity_hash = identity_svc.user_identity(user_id)
+        limit = settings.AUTHENTICATED_CODE_DAILY_MESSAGE_LIMIT
+    else:
+        identity_hash = identity_svc.anon_identity(anon_id)
+        limit = settings.FREE_DAILY_MESSAGE_LIMIT
+    result = await session.execute(
+        select(UsageCounter.count).where(
+            UsageCounter.identity_hash == identity_hash,
+            UsageCounter.day == _today(),
+            UsageCounter.kind == "coding",
+        )
+    )
+    used = result.scalar_one_or_none() or 0
+    return used, limit
+
+
+_REFUND = text(
+    """
+    UPDATE usage_counters
+    SET count = GREATEST(count - 1, 0), updated_at = now()
+    WHERE identity_hash = :ih AND day = :day AND kind = :kind
+    """
+)
+
+
+async def _release(session: AsyncSession, identity_hash: str, kind: str) -> None:
+    await session.execute(
+        _REFUND, {"ih": identity_hash, "day": _today(), "kind": kind}
+    )
+
+
+async def refund_message_quota(
+    session: AsyncSession,
+    *,
+    user_id: str | None,
+    anon_id: str,
+    client_ip: str,
+    coding_mode: bool,
+) -> None:
+    """Give back one message previously charged by ``enforce_message_quota``.
+
+    Called when the provider request fails (e.g. a 5xx) so a caller is only
+    charged for a successful reply. Mirrors the bucket(s) enforce charges: the
+    user bucket for authenticated callers, or both the anon and network buckets
+    for anonymous callers. Never drops a counter below zero.
+    """
+    kind = "coding" if coding_mode else "standard"
+    if user_id is not None:
+        await _release(session, identity_svc.user_identity(user_id), kind)
+        return
+    await _release(session, identity_svc.anon_identity(anon_id), kind)
+    net_limit = (
+        settings.FREE_DAILY_MESSAGE_LIMIT
+        * settings.ANONYMOUS_NETWORK_BUCKET_MULTIPLIER
+    )
+    if net_limit > 0:
+        await _release(session, identity_svc.network_identity(client_ip), kind)

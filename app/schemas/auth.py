@@ -56,9 +56,16 @@ class MessageOut(BaseModel):
     detail: str
 
 
+class UsageBucket(BaseModel):
+    used: int
+    limit: int
+    remaining: int
+
+
 class UsageStatus(BaseModel):
     authenticated: bool
     kind: str
     used: int
     limit: int
     remaining: int
+    coding: UsageBucket

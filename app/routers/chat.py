@@ -38,6 +38,19 @@ async def _charge_quota(
         )
 
 
+async def _refund_quota(
+    session: AsyncSession, ctx: IdentityContext, coding_mode: bool
+) -> None:
+    async with rls_tx(session, ctx.user_id):
+        await usage_service.refund_message_quota(
+            session,
+            user_id=ctx.user_id,
+            anon_id=ctx.anon_id,
+            client_ip=ctx.client_ip,
+            coding_mode=coding_mode,
+        )
+
+
 @router.post("/gemini", response_model=ChatResponse)
 async def chat_gemini(
     req: ChatRequest,
@@ -46,7 +59,17 @@ async def chat_gemini(
     _rl: None = Depends(ai_rate_limit),
 ) -> ChatResponse:
     await _charge_quota(session, ctx, req.coding_mode)
-    reply = await gemini_service.generate_reply(req)
+    try:
+        reply = await gemini_service.generate_reply(req)
+    except Exception:
+        # Provider failed (e.g. a 5xx / not configured) — refund the charge so
+        # the caller is only billed for a successful reply. A refund failure
+        # must not mask the original provider error.
+        try:
+            await _refund_quota(session, ctx, req.coding_mode)
+        except Exception:
+            pass
+        raise
     analytics.capture(
         ctx.distinct_id,
         "message_sent",
@@ -63,7 +86,17 @@ async def chat_ollama(
     _rl: None = Depends(ai_rate_limit),
 ) -> ChatResponse:
     await _charge_quota(session, ctx, req.coding_mode)
-    reply = await ollama_service.generate_reply(req)
+    try:
+        reply = await ollama_service.generate_reply(req)
+    except Exception:
+        # Provider failed (e.g. a 5xx / not configured) — refund the charge so
+        # the caller is only billed for a successful reply. A refund failure
+        # must not mask the original provider error.
+        try:
+            await _refund_quota(session, ctx, req.coding_mode)
+        except Exception:
+            pass
+        raise
     analytics.capture(
         ctx.distinct_id,
         "message_sent",

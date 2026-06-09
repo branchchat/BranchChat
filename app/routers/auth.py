@@ -29,6 +29,7 @@ from app.schemas.auth import (
     RequestPasswordReset,
     ResetPassword,
     SignupRequest,
+    UsageBucket,
     UsageStatus,
     UserOut,
     VerifyEmail,
@@ -141,12 +142,20 @@ async def usage(
         used, limit = await usage_service.get_status(
             session, user_id=ctx.user_id, anon_id=ctx.anon_id
         )
+        coding_used, coding_limit = await usage_service.get_coding_status(
+            session, user_id=ctx.user_id, anon_id=ctx.anon_id
+        )
     return UsageStatus(
         authenticated=ctx.user_id is not None,
         kind="standard",
         used=used,
         limit=limit,
         remaining=max(0, limit - used),
+        coding=UsageBucket(
+            used=coding_used,
+            limit=coding_limit,
+            remaining=max(0, coding_limit - coding_used),
+        ),
     )
 
 
