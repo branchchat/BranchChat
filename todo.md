@@ -192,7 +192,7 @@ source of truth for the tree.
 
 ### P0 - Keep The App Stable
 
-- [ ] Verify production env on deploy targets: `VITE_API_BASE`, `VITE_PROVIDER`, `GEMINI_API_KEY`, `JWT_SECRET_KEY`, `ANON_IDENTITY_SALT`, `COOKIE_SECURE`, `COOKIE_SAMESITE`, `CORS_ORIGINS`, `ALLOWED_HOSTS`, `ENABLE_LEGACY_TREE_API=false`.
+- [ ] Verify production env on deploy targets: `VITE_API_BASE`, `VITE_PROVIDER`, `GEMINI_API_KEY`, `JWT_SECRET_KEY`, `ANON_IDENTITY_SALT`, `COOKIE_SECURE`, `COOKIE_SAMESITE`, `CORS_ORIGINS`, `ALLOWED_HOSTS`, `ENABLE_LEGACY_TREE_API=false`, **`DB_USE_PGBOUNCER=true`** (required behind the Supabase transaction pooler, see below), `DB_SSL=true`.
 - [ ] Confirm Gemini primary/fallback model names in production and document any provider-side quota limits.
 - [ ] Run backend tests before backend releases: `.\.venv\Scripts\python.exe -m unittest discover tests`.
 - [ ] Run frontend checks before UI releases: `npm.cmd test`, `npm.cmd run build`, and `npm.cmd run lint`.
@@ -202,6 +202,7 @@ source of truth for the tree.
 - [ ] Revisit zoom/readability: when viewing many nodes, consider a minimap/outline/sidebar preview instead of relying only on canvas zoom.
 - [ ] Improve mobile workspace browser density and ensure search result cards do not squeeze important context.
 - [ ] Add an "open selected branch in focused view" mode for long conversations where full-tree zoom makes text hard to read.
+- [ ] **@Jayden — auto-pan/center the canvas to the newest node after Send/Branch.** Found 2026-06-08 while verifying the prod chat fix: a new reply (or an `isError` node) is created and rendered correctly, but the viewport stays put, so on a tall tree the new node lands below the fold and looks like "nothing happened" (sent a message, got a real "Four" reply, but had to scroll to see it). Error handling itself is fine (failed sends flip to the red `isError` node with the backend `detail`). Just center/scroll-into-view the freshly added assistant node when it resolves.
 
 ### P1 - Social pipeline UI screenshots (@Jayden's Claude — please action)
 
@@ -274,6 +275,7 @@ capturing these trivial.
 
 ## Recently Completed
 
+- [x] **Production chat outage fixed (2026-06-09, backend).** Root cause: `DB_USE_PGBOUNCER` was unset behind Supabase's transaction pooler, so asyncpg's prepared-statement cache collided across pooled backends and every DB-backed endpoint (`/api/chat/*`, `/api/auth/usage`) flapped 500s. Fix: set `DB_USE_PGBOUNCER=true` on Railway and redeployed (`backend` commit `c7c8d89`; the disable logic was already present in `app/db/session.py`, just gated on the flag). Verified: `/api/auth/usage` 12/12 = 200; chat returns real Gemini replies; refund-on-5xx and the coding-mode usage bucket confirmed live. Remaining intermittent 502s are Gemini free-tier 503/429 (overloaded/rate-limited), handled gracefully (clean `detail` + quota refund), not a backend bug. Added `DB_USE_PGBOUNCER=true` to the P0 deploy-env checklist and an incident note in `docs/backend-security.md`.
 - [x] Auth token routes: `/reset-password` + `/verify-email` pages (read `?token=`, POST it), forgot-password mode in `AuthDialog`, `VerifyEmailBanner` resend for unverified users, 4 `api.ts` helpers. Live-verified end-to-end with real tokens from the dev email log. Merged (#12).
 - [x] Merged `roshaan/landing` → `jayden/frontend`: marketing landing page, waitlist, **react-router**, PostHog (consent-gated) analytics, cookie consent, privacy/terms pages. The full chat shell now lives in `AppChat.tsx` under the gated `/app` route; resolved the entry-file restructure against 10 PRs of divergence. Merged (#11). _Deploy follow-ups (Pages production-branch repoint, Supabase `waitlist` table, PostHog key) tracked above — still a human/deploy decision._
 - [x] jsdom test env (vitest setupFiles + jest-dom; per-file `// @vitest-environment jsdom`) + store tests (`migratePersistedState`, create/rename/delete invariants, `loadDemoChat`, `openNode`) and a `UsageMeter` RTL test. 28 tests total. Merged (#10).
