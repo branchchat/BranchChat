@@ -26,7 +26,13 @@ security entirely, so connecting as `postgres` would silently void every policy.
 - **Pooling.** Bounded SQLAlchemy pool (`DB_POOL_SIZE` + `DB_MAX_OVERFLOW` →
   10–20 connections) with `pool_pre_ping`. Behind Supabase's transaction pooler
   (Supavisor) / PgBouncer, set `DB_USE_PGBOUNCER=true` to disable asyncpg
-  prepared statements (unsafe across pooled server connections).
+  prepared statements (unsafe across pooled server connections). **This is not
+  optional in prod:** on 2026-06-09 the flag was unset behind Supabase's
+  transaction pooler, so asyncpg's prepared-statement cache collided across
+  pooled backends and every DB-backed endpoint flapped 500s (chat outage). Setting
+  `DB_USE_PGBOUNCER=true` and redeploying resolved it; `/api/auth/usage` then
+  returned 200 across a 12/12 stress test. The code path that disables prepared
+  statements lives in `app/db/session.py` and is gated on this flag.
 
 ## OWASP / hardening checklist → where it lives
 
