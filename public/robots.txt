@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+Disallow: /app
+Disallow: /reset-password
+Disallow: /verify-email
+
+Sitemap: https://branch-chat.com/sitemap.xml
