@@ -49,8 +49,12 @@ Frontend:
 Backend:
 
 - `app/main.py`: middleware, app setup, CORS, rate limits, startup.
-- `app/routers/chat.py`: AI routes and summarization.
-- `app/services/gemini_service.py`: Gemini prompt/provider logic.
+- `app/routers/chat.py`: generic `POST /api/chat/{provider}` AI route.
+- `app/routers/models.py`: model registry + recommendation endpoints.
+- `app/services/chat_service.py`: unified generation entrypoint (prompt assembly, model validation, error mapping).
+- `app/services/providers/`: provider abstraction — `base.py` interface + gemini/openai/anthropic/ollama implementations (vendor wire formats live ONLY here).
+- `app/services/model_catalog.py`: model metadata registry (the source of truth the route validates against).
+- `app/services/model_recommender.py`: rule-based task→model recommendation scoring.
 - `app/services/usage_service.py`: daily quota logic.
 - `app/routers/auth.py` and `app/services/auth_service.py`: login, cookies, email auth, failed login limiter.
 - `app/routers/share.py` and `app/services/share_service.py`: shared branch snapshots.

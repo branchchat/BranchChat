@@ -73,9 +73,24 @@ class Settings(BaseSettings):
     GEMINI_TIMEOUT_SECONDS: float = 30.0
     GEMINI_BASE_URL: str = "https://generativelanguage.googleapis.com"
 
+    OPENAI_API_KEY: str | None = None
+    OPENAI_MODEL: str = "gpt-5.2"
+    OPENAI_TIMEOUT_SECONDS: float = 60.0
+    OPENAI_BASE_URL: str = "https://api.openai.com"
+
+    ANTHROPIC_API_KEY: str | None = None
+    ANTHROPIC_MODEL: str = "claude-sonnet-4-6"
+    ANTHROPIC_TIMEOUT_SECONDS: float = 60.0
+    ANTHROPIC_BASE_URL: str = "https://api.anthropic.com"
+
     OLLAMA_URL: str = "http://localhost:11434"
     OLLAMA_MODEL: str = "llama3.1:8b"
     OLLAMA_TIMEOUT_SECONDS: float = 120.0
+    # Ollama needs no API key, so "configured" can't be inferred from secrets.
+    # This flag controls whether it is ADVERTISED in /api/models (the legacy
+    # /api/chat/ollama route keeps working either way) — leave false in prod,
+    # where no local model runs.
+    OLLAMA_ENABLED: bool = False
 
     # -- Server-side guardrails (never trust the client) --------------------
     MAX_MESSAGE_CHARS: int = 5_000
