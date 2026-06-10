@@ -14,6 +14,7 @@ import logging
 import httpx
 
 from app.core.config import settings
+from app.schemas.chat import ProviderMessage
 from app.services.providers.base import (
     AIProvider,
     GenerationRequest,
@@ -39,9 +40,13 @@ class AnthropicProvider(AIProvider):
         if not self.is_configured():
             raise ProviderNotConfiguredError()
 
-        history = merge_alternating(req.history)
-        messages = [{"role": m.role, "content": m.content} for m in history]
-        messages.append({"role": "user", "content": req.message})
+        # Merge AFTER appending the new message: a (crafted) history ending in
+        # a user turn would otherwise produce a same-role pair at the tail,
+        # which this API hard-rejects.
+        transcript = merge_alternating(
+            [*req.history, ProviderMessage(role="user", content=req.message)]
+        )
+        messages = [{"role": m.role, "content": m.content} for m in transcript]
 
         body = {
             "model": req.model,
