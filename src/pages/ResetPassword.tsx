@@ -4,17 +4,19 @@
 // backend's 400 detail.
 
 import { useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link } from "react-router-dom";
 
 import { AuthPage } from "@/pages/AuthPage";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ChatApiError, resetPassword } from "@/lib/api";
+import { readAuthTokenFromUrl } from "@/lib/authToken";
 
 export function ResetPassword() {
-  const [params] = useSearchParams();
-  const token = params.get("token") ?? "";
+  // Reads the token AND strips it from the address bar — a live reset token
+  // must not sit in history/analytics while the user types a new password.
+  const token = readAuthTokenFromUrl();
 
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);

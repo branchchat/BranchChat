@@ -8,6 +8,7 @@ import { Link } from "react-router-dom";
 import { AuthPage } from "@/pages/AuthPage";
 import { Button } from "@/components/ui/button";
 import { ChatApiError, verifyEmail } from "@/lib/api";
+import { readAuthTokenFromUrl } from "@/lib/authToken";
 import { useAuthStore } from "@/store/authStore";
 
 type Status =
@@ -21,7 +22,9 @@ type Status =
 const attempted = new Set<string>();
 
 export function VerifyEmail() {
-  const token = new URLSearchParams(window.location.search).get("token") ?? "";
+  // Reads the token AND strips it from the address bar (history/analytics
+  // hygiene); a module cache inside keeps re-renders stable afterwards.
+  const token = readAuthTokenFromUrl();
   const hydrate = useAuthStore((s) => s.hydrate);
   // Derive the no-token error during render (avoids a synchronous setState in
   // the effect); the network result is set asynchronously below.
