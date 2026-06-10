@@ -199,9 +199,9 @@ source of truth for the tree.
 
 ### P1 - UX Improvements
 
-- [ ] Revisit zoom/readability: when viewing many nodes, consider a minimap/outline/sidebar preview instead of relying only on canvas zoom.
-- [ ] Improve mobile workspace browser density and ensure search result cards do not squeeze important context.
-- [ ] Add an "open selected branch in focused view" mode for long conversations where full-tree zoom makes text hard to read.
+- [x] Revisit zoom/readability — a pannable/zoomable `<MiniMap>` is already in `Canvas.tsx`, and the new "Read" focused view (below) covers the readability angle.
+- [x] Improve mobile workspace browser density — the sidebar is now an overlay drawer on mobile (full-width canvas behind it, tap-to-dismiss, auto-close on select) instead of squeezing the canvas. Search result cards already truncate/clamp. Merged (#20).
+- [x] Add an "open selected branch in focused view" mode — the "Read" button opens a single-column reading view of the selected path (root→node). Merged (#19).
 
 ### P1 - Social pipeline UI screenshots (@Jayden's Claude — please action)
 
@@ -236,8 +236,8 @@ capturing these trivial.
 
 ### P1 - Tree Layout And Canvas
 
-- [ ] Verify branch creation from collapsed nodes and search navigation into collapsed subtrees.
-- [ ] Check that imported JSON sessions normalize node size/position fields consistently.
+- [x] ~~Verify branch creation from collapsed nodes and search navigation into collapsed subtrees.~~ **N/A in the rebuild** — node collapse isn't implemented (the `collapsedNodeIds` field exists but nothing uses it; the canvas renders the whole tree). Nothing to verify until/unless collapse is added.
+- [x] Check that imported JSON sessions normalize node size/position fields consistently — the new session import (#18) strips `position`/`width`/`height` (and `isLoading`/`isError`) on import so the canvas re-runs layout, keeping them consistent regardless of source.
 
 ### P1 - Security follow-ups (from 2026-06-06 audit, non-blocking for single-instance beta)
 
@@ -252,7 +252,7 @@ capturing these trivial.
 
 - [ ] Test login/signup/reset flows end-to-end against the deployed backend, including cross-site cookies.
 - [ ] Add a regression test for successful login after repeated `/api/auth/me` and `/api/auth/usage` calls.
-- [ ] Make quota UI copy match backend limits exactly in production.
+- [x] Make quota UI copy match backend limits exactly — the `UsageMeter` renders the backend's `used`/`limit`/`remaining` (and the coding bucket) verbatim; nothing hardcodes 10/50.
 - [ ] Decide whether email verification should gate authenticated daily quota or only account trust.
 
 ### P2 - Backend Cleanup
@@ -264,18 +264,19 @@ capturing these trivial.
 
 ### P2 - Persistence And Portability
 
-- [ ] Add explicit localStorage export/import versioning for future migrations.
-- [ ] Consider optional server-side sync for authenticated users, while preserving local-first behavior.
-- [ ] Add safeguards for very large local sessions before localStorage becomes fragile.
+- [x] Add explicit localStorage export/import versioning — chats export to a versioned JSON envelope (`branchchat-session` v1) and import validates the version + normalizes the tree. Merged (#18).
+- [ ] Consider optional server-side sync for authenticated users, while preserving local-first behavior. _(Deferred — a product/architecture decision that needs backend work; not a pure-frontend task. @Roshaan/human call.)_
+- [x] Add safeguards for very large local sessions — the Toolbar shows a "storage getting large — export to back up" nudge past ~3.5 MB of stored JSON, and export gives a durable backup. Merged (#18).
 
 ### P2 - Testing
 
-- [ ] Add React Testing Library coverage for `Toolbar` search result rendering. (`openNode` dispatch is already unit-tested at the store level; jsdom env + a `UsageMeter` RTL test landed in #10 — this is the remaining component-rendering piece.)
-- [ ] Add browser/e2e smoke test: load demo, search phrase, click result, assert node is selected/centered.
+- [x] Add React Testing Library coverage for `Toolbar` search result rendering — `Toolbar.test.tsx` covers matching result cards + `<mark>` highlight and the empty state. Merged (#20).
+- [ ] Add browser/e2e smoke test: load demo, search phrase, click result, assert node is selected/centered. _(Deferred — needs a committed browser-test runner (Playwright): a real infra add (heavy dep + CI download) for a beta, and `npm audit` = 0 is a project invariant. The same flows are currently smoke-checked per-PR via headless Chrome (puppeteer-core, not committed). Worth a deliberate yes before adding the runner.)_
 - [ ] Add backend contract tests for `/api/chat/gemini`, `/api/chat/summarize`, and `/api/share`.
 
 ## Recently Completed
 
+- [x] Backlog sweep — worked the remaining frontend-lane todo items. **Built:** session export/import as versioned JSON + large-session nudge (#18); "Read" focused reading-view of the selected path (#19); mobile sidebar drawer + Toolbar search RTL test (#20). **Already done / N-A (checked off above with notes):** minimap (already in Canvas), quota-copy-verbatim, "imported JSON normalizes size/position" (folded into #18's import), collapsed-node verification (collapse isn't in the rebuild). **Deferred with rationale:** server-side sync (backend/product decision), e2e smoke test (needs a committed Playwright runner — deliberate infra call). 54 tests total, all green; each feature live-verified in headless Chrome.
 - [x] Social-pipeline UI screenshots (Roshaan's P1 ask) — captured all 4 from the live app and pushed to `roshaan/social-pipeline` (`assets/ui/`, `[skip ci]`): `canvas-branching.png`, `full-tree.png`, `node-detail.png`, `branch-compare.png`. 2 of the 4 needed features that didn't exist, so I built them properly first: **node tags/comments** (store actions + `NodeAnnotations` inline footer on canvas nodes, demo enriched — merged #16) and the **branch-compare view** (`lib/compare.ts` pure helpers + full-screen `CompareView` overlay that dims shared context and marks where two paths diverge — merged #17). +7 tests across the two (44 total), live-verified each in headless Chrome. README table annotated per file.
 - [x] SEO P1 follow-ups (the two routing-layer items from Roshaan's 2026-06-10 homepage SEO pass): (1) per-route `<title>` + `<meta description>` via a new `usePageMeta` hook — captures the index.html defaults at module load and restores them on unmount, so it inherits whatever index.html ships (Roshaan's marketing copy on `roshaan/landing`) and never touches the verification/OG/JSON-LD tags; applied to `/privacy` + `/terms` (title + description), `/app` + the two auth pages (title only). (2) Code-split — lazy-loaded every route except `Landing`, so React Flow / the chat shell splits into its own ~250 kB chunk fetched only on `/app`; landing initial JS 281 kB → 193 kB gzip. +3 jsdom tests (37 total), build green, lint clean, live-verified all route titles + restore-on-nav in headless Chrome. Merged (#15). _The `index` chunk is still >500 kB (React + router + Landing's motion/PostHog, needed on first paint) — splitting motion / deferring PostHog is a separate optional pass._
 - [x] Coding-mode usage meter: wired the additive `coding` bucket from `/api/auth/usage` (Roshaan's backend `0a19026`) into `UsageMeter` — extracted a reusable `QuotaBar` (each bar now aria-labelled for AT) and render the coding allowance as a second `Code2`-iconed bar, only when the backend exposes it (`coding` typed optional in `api.ts` so it degrades against an older backend). +2 RTL tests (34 total). Merged (#14). _Closes the 2nd of Roshaan's two open quota questions; the 1st (charge-before-provider) his backend already fixed via refund-on-5xx._
