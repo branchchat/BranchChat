@@ -61,4 +61,50 @@ describe("UsageMeter", () => {
     expect(screen.getByText("0/10 today")).toBeInTheDocument();
     expect(screen.queryByText(/@/)).not.toBeInTheDocument();
   });
+
+  it("renders no coding bar when the backend omits the bucket", () => {
+    useAuthStore.setState({
+      user: null,
+      usage: {
+        authenticated: false,
+        kind: "standard",
+        used: 1,
+        limit: 10,
+        remaining: 9,
+      },
+      hydrated: true,
+    });
+
+    render(<UsageMeter />);
+    // Only the standard bar; no coding allowance shown.
+    expect(screen.getAllByRole("progressbar")).toHaveLength(1);
+    expect(screen.queryByText(/code$/)).not.toBeInTheDocument();
+  });
+
+  it("renders a second coding bar with the backend's coding limits", () => {
+    useAuthStore.setState({
+      user: null,
+      usage: {
+        authenticated: true,
+        kind: "standard",
+        used: 12,
+        limit: 50,
+        remaining: 38,
+        coding: { used: 3, limit: 10, remaining: 7 },
+      },
+      hydrated: true,
+    });
+
+    render(<UsageMeter />);
+    expect(screen.getByText("12/50 today")).toBeInTheDocument();
+    expect(screen.getByText("3/10 code")).toBeInTheDocument();
+
+    // Two distinct, labelled progressbars.
+    expect(screen.getAllByRole("progressbar")).toHaveLength(2);
+    const coding = screen.getByRole("progressbar", {
+      name: "coding-mode messages used",
+    });
+    expect(coding).toHaveAttribute("aria-valuenow", "3");
+    expect(coding).toHaveAttribute("aria-valuemax", "10");
+  });
 });
