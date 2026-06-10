@@ -12,8 +12,6 @@ This file is for Claude/human coordination after the handoff. Keep it current wh
 
 ## Active Work
 
-- **Jayden — social-pipeline UI screenshots + the two features they need (2026-06-10):** Roshaan's P1 "social pipeline UI screenshots" ask needs real UI, and 2 of the 4 shots (branch-compare, node tags/comments) had no feature behind them. Building both properly, then capturing all 4 and pushing to `roshaan/social-pipeline`. (1) Node tags/comments — branch `jayden/node-annotations`: store actions + `NodeAnnotations` footer on canvas nodes, demo enriched. (2) Branch-compare view — next. (3) Capture hero canvas / zoomed tree / tagged node / compare, push PNGs with `[skip ci]`.
-
 - **Jayden (frontend) — branch `jayden/frontend`**: Rebuilding the frontend from scratch on top of the handoff docs. Done so far:
   - Vite + React + TS + Tailwind + shadcn/ui scaffold.
   - Milestone 2 "data core" — `src/types/chat.ts` (`ChatNode`, `ChatSessionState`) and `src/store/chatStore.ts` (Zustand persisted to `branchchat-storage`, one chat with a root system node, `selectNode` + placeholder `addNode`).
@@ -217,11 +215,13 @@ Text/hook posts auto-generate branded cards, but "show the product" posts need
 **real UI screenshots**, and a good shot needs a populated canvas — which is your
 area. Please capture a small starter set:
 
-- [ ] **Canvas with a real branching conversation** (several nodes, ≥1 visible fork) — the hero shot
-- [ ] **Branch-compare view** (two endpoints side by side)
-- [ ] **A node with tags/comments or context links**
-- [ ] **Zoomed-out full tree** showing the scale of an exploration
+- [x] **Canvas with a real branching conversation** (several nodes, ≥1 visible fork) — the hero shot → `canvas-branching.png`
+- [x] **Branch-compare view** (two endpoints side by side) → `branch-compare.png`
+- [x] **A node with tags/comments or context links** → `node-detail.png`
+- [x] **Zoomed-out full tree** showing the scale of an exploration → `full-tree.png`
 - [ ] (optional) replay/history or any feature worth highlighting
+
+_All four pushed to `roshaan/social-pipeline` (`social-pipeline/assets/ui/`, `[skip ci]`, README table annotated). The branch-compare + node tags/comments **features** were built to make those two shots real — merged to `jayden/frontend` as #16 (tags/comments) and #17 (compare). @Roshaan: pull the branch to pick them into the pipeline._
 
 Details / naming convention / where they're used: see
 `social-pipeline/assets/ui/README.md`. **Drop the PNGs into
@@ -276,6 +276,7 @@ capturing these trivial.
 
 ## Recently Completed
 
+- [x] Social-pipeline UI screenshots (Roshaan's P1 ask) — captured all 4 from the live app and pushed to `roshaan/social-pipeline` (`assets/ui/`, `[skip ci]`): `canvas-branching.png`, `full-tree.png`, `node-detail.png`, `branch-compare.png`. 2 of the 4 needed features that didn't exist, so I built them properly first: **node tags/comments** (store actions + `NodeAnnotations` inline footer on canvas nodes, demo enriched — merged #16) and the **branch-compare view** (`lib/compare.ts` pure helpers + full-screen `CompareView` overlay that dims shared context and marks where two paths diverge — merged #17). +7 tests across the two (44 total), live-verified each in headless Chrome. README table annotated per file.
 - [x] SEO P1 follow-ups (the two routing-layer items from Roshaan's 2026-06-10 homepage SEO pass): (1) per-route `<title>` + `<meta description>` via a new `usePageMeta` hook — captures the index.html defaults at module load and restores them on unmount, so it inherits whatever index.html ships (Roshaan's marketing copy on `roshaan/landing`) and never touches the verification/OG/JSON-LD tags; applied to `/privacy` + `/terms` (title + description), `/app` + the two auth pages (title only). (2) Code-split — lazy-loaded every route except `Landing`, so React Flow / the chat shell splits into its own ~250 kB chunk fetched only on `/app`; landing initial JS 281 kB → 193 kB gzip. +3 jsdom tests (37 total), build green, lint clean, live-verified all route titles + restore-on-nav in headless Chrome. Merged (#15). _The `index` chunk is still >500 kB (React + router + Landing's motion/PostHog, needed on first paint) — splitting motion / deferring PostHog is a separate optional pass._
 - [x] Coding-mode usage meter: wired the additive `coding` bucket from `/api/auth/usage` (Roshaan's backend `0a19026`) into `UsageMeter` — extracted a reusable `QuotaBar` (each bar now aria-labelled for AT) and render the coding allowance as a second `Code2`-iconed bar, only when the backend exposes it (`coding` typed optional in `api.ts` so it degrades against an older backend). +2 RTL tests (34 total). Merged (#14). _Closes the 2nd of Roshaan's two open quota questions; the 1st (charge-before-provider) his backend already fixed via refund-on-5xx._
 - [x] Merged Roshaan's `roshaan/model-branches` → `jayden/frontend`: the "Branch with model" feature (branch from any message picking OpenAI/Anthropic/Gemini/local; nearest-ancestor override inheritance via `resolveModelForNode`; `ModelPicker` with backend-ranked recommendations; model badges on AI replies). Reviewed the high-risk-file diffs line-by-line (`chatStore.ts`/`api.ts`/`types/chat.ts`/`InputBar.tsx`/`ChatNode.tsx` — `requestChatReply` now returns `{reply, provider, model}`, everything else additive, v1 persist unchanged) and re-verified in a worktree (32/32 tests, build green, lint = only the 3 pre-existing errors). Merged (#13). _Pre-existing CookieConsent-overlaps-composer bug Roshaan flagged is tracked separately; not from this branch._
