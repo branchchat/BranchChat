@@ -12,6 +12,8 @@ This file is for Claude/human coordination after the handoff. Keep it current wh
 
 ## Active Work
 
+- **Jayden — coding-mode usage meter (2026-06-10, branch `jayden/coding-usage-meter`):** wire the new `/api/auth/usage` `coding` bucket (Roshaan's backend `0a19026`) into `UsageMeter` so the coding-mode quota is visible alongside the standard one. `coding` typed optional in `api.ts` (defensive; renders only when present).
+
 - **Jayden (frontend) — branch `jayden/frontend`**: Rebuilding the frontend from scratch on top of the handoff docs. Done so far:
   - Vite + React + TS + Tailwind + shadcn/ui scaffold.
   - Milestone 2 "data core" — `src/types/chat.ts` (`ChatNode`, `ChatSessionState`) and `src/store/chatStore.ts` (Zustand persisted to `branchchat-storage`, one chat with a root system node, `selectNode` + placeholder `addNode`).

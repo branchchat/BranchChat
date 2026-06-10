@@ -239,15 +239,26 @@ export interface AuthUser {
   created_at: string;
 }
 
+// One quota counter (the backend's `UsageBucket`): coding mode has its own
+// daily allowance separate from standard messages.
+export interface UsageBucket {
+  used: number;
+  limit: number;
+  remaining: number;
+}
+
 // Backend `UsageStatus`. `limit`/`used` are the backend's numbers — render
 // them directly so quota copy always matches the server (todo "make quota UI
-// copy match backend limits").
+// copy match backend limits"). The top-level fields are the standard bucket;
+// `coding` is the additive coding-mode bucket (backend `0a19026`). Typed
+// optional so the meter degrades gracefully against an older backend.
 export interface UsageStatus {
   authenticated: boolean;
   kind: string;
   used: number;
   limit: number;
   remaining: number;
+  coding?: UsageBucket;
 }
 
 // GET /api/auth/me. Resolves null when not logged in — a 401 here is a normal
