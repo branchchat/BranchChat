@@ -28,7 +28,10 @@ Add a one-line note here per file if the topic isn't obvious from the name:
 
 | File | Best for posts about |
 |------|----------------------|
-| _(add yours)_ | |
+| `canvas-branching.png` | The core idea / "what is BranchChat" — a conversation forking into two paths on the canvas (hero/money shot). |
+| `full-tree.png` | Scale of an exploration / "map your thinking" — the whole branching tree zoomed out. |
+| `node-detail.png` | Organizing research — tagging (`#itinerary`, `#must-see`) and commenting on a node. |
+| `branch-compare.png` | Comparing paths — two branch endpoints side by side, shared context dimmed, divergence marked. |
 
 ## How it's used
 
