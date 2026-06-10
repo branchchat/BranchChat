@@ -320,6 +320,12 @@ export interface ChatStoreState {
   openCompare: () => void;
   closeCompare: () => void;
 
+  // Focused reading view of the selected path (root→selected as a transcript).
+  // Transient — not persisted (see partialize).
+  focusViewOpen: boolean;
+  openFocusView: () => void;
+  closeFocusView: () => void;
+
   // --- chat (workspace tab) management, driven by the Toolbar ---
   // Create a new empty chat and switch to it; returns the new chat id.
   createChat: (opts?: { title?: string; workspace?: Workspace }) => string;
@@ -549,6 +555,10 @@ export const useChatStore = create<ChatStoreState>()(
         compareOpen: false,
         openCompare: () => set({ compareOpen: true }),
         closeCompare: () => set({ compareOpen: false }),
+
+        focusViewOpen: false,
+        openFocusView: () => set({ focusViewOpen: true }),
+        closeFocusView: () => set({ focusViewOpen: false }),
 
         createChat: (opts) => {
           const chat = createInitialChat(
