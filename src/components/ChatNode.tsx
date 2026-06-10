@@ -12,6 +12,7 @@ import { Bot, RotateCcw } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { NodeAnnotations } from "@/components/NodeAnnotations";
 import { modelLabel } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { NODE_WIDTH } from "@/lib/treeLayout";
@@ -126,6 +127,10 @@ function ChatNodeComponent({ data, selected }: NodeProps<ChatFlowNode>) {
               Retry
             </Button>
           )}
+
+          {/* Tags + comments (organize without spending quota). Hidden while a
+              reply is streaming; the root system node isn't annotatable. */}
+          {!node.isLoading && !isRoot && <NodeAnnotations node={node} />}
         </CardContent>
 
         {/* Outgoing edge to children. */}

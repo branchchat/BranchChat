@@ -92,6 +92,10 @@ function createJournalId(): string {
   idCounter += 1;
   return `journal_${Date.now()}_${idCounter}`;
 }
+function createCommentId(): string {
+  idCounter += 1;
+  return `comment_${Date.now()}_${idCounter}`;
+}
 
 // Path from root down to `nodeId`, inclusive. Walks parentId up, then reverses.
 function computeActivePath(
@@ -352,6 +356,14 @@ export interface ChatStoreState {
   // Re-request the reply for an existing (e.g. errored) assistant node.
   retryAssistant: (assistantId: string) => void;
 
+  // --- node annotations (organize an exploration without spending quota) ---
+  // Add a tag to a node (trimmed; deduped; no-op if empty or already present).
+  addTag: (nodeId: string, tag: string) => void;
+  removeTag: (nodeId: string, tag: string) => void;
+  // Append a comment to a node (trimmed; no-op if empty).
+  addComment: (nodeId: string, content: string) => void;
+  removeComment: (nodeId: string, commentId: string) => void;
+
   // Low-level helper retained from Milestone 2 (used by tests/console).
   addNode: (
     parentId: string,
@@ -471,6 +483,38 @@ export const useChatStore = create<ChatStoreState>()(
         }
       };
 
+      // Replace a node in the active chat via `patch(node)` and bump updatedAt,
+      // optionally appending a journal entry. No-op if chat/node is missing or
+      // `patch` returns null (lets callers skip writes, e.g. a duplicate tag).
+      const patchActiveNode = (
+        nodeId: string,
+        patch: (node: ChatNode) => Partial<ChatNode> | null,
+        journal?: Omit<JournalEntry, "id" | "createdAt">,
+      ) =>
+        set((state) => {
+          const chat = state.chats[state.activeChatId];
+          const node = chat?.nodes[nodeId];
+          if (!chat || !node) return {};
+          const updates = patch(node);
+          if (!updates) return {};
+          return {
+            chats: {
+              ...state.chats,
+              [chat.id]: {
+                ...chat,
+                nodes: { ...chat.nodes, [nodeId]: { ...node, ...updates } },
+                journalEntries: journal
+                  ? [
+                      ...chat.journalEntries,
+                      { id: createJournalId(), createdAt: Date.now(), ...journal },
+                    ]
+                  : chat.journalEntries,
+                updatedAt: Date.now(),
+              },
+            },
+          };
+        });
+
       const initialChat = createInitialChat();
 
       return {
@@ -506,6 +550,7 @@ export const useChatStore = create<ChatStoreState>()(
             node: createNodeId,
             chat: createChatId,
             journal: createJournalId,
+            comment: createCommentId,
           });
           set((state) => ({
             chats: { ...state.chats, [chat.id]: chat },
@@ -719,6 +764,48 @@ export const useChatStore = create<ChatStoreState>()(
 
           void requestAssistantReply(chat.id, userId, assistantId);
         },
+
+        addTag: (nodeId, tag) => {
+          const t = tag.trim();
+          if (!t) return;
+          patchActiveNode(
+            nodeId,
+            (node) =>
+              (node.tags ?? []).includes(t)
+                ? null
+                : { tags: [...(node.tags ?? []), t] },
+            { type: "tag", message: `Tagged "${t}"`, nodeId },
+          );
+        },
+
+        removeTag: (nodeId, tag) =>
+          patchActiveNode(nodeId, (node) => {
+            const tags = (node.tags ?? []).filter((x) => x !== tag);
+            return { tags: tags.length ? tags : undefined };
+          }),
+
+        addComment: (nodeId, content) => {
+          const text = content.trim();
+          if (!text) return;
+          patchActiveNode(
+            nodeId,
+            (node) => ({
+              comments: [
+                ...(node.comments ?? []),
+                { id: createCommentId(), content: text, createdAt: Date.now() },
+              ],
+            }),
+            { type: "note", message: "Added a comment", nodeId },
+          );
+        },
+
+        removeComment: (nodeId, commentId) =>
+          patchActiveNode(nodeId, (node) => {
+            const comments = (node.comments ?? []).filter(
+              (c) => c.id !== commentId,
+            );
+            return { comments: comments.length ? comments : undefined };
+          }),
 
         addNode: (parentId, init) => {
           let createdId: string | null = null;

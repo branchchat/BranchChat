@@ -11,6 +11,7 @@ export interface DemoIdFactory {
   node: () => string;
   chat: () => string;
   journal: () => string;
+  comment: () => string;
 }
 
 export function buildDemoChat(ids: DemoIdFactory): ChatSessionState {
@@ -74,7 +75,14 @@ export function buildDemoChat(ids: DemoIdFactory): ChatSessionState {
       role: "assistant",
       content:
         "Then prioritize: Kiyomizu-dera at opening, the Philosopher's Path to Ginkaku-ji, Ryoan-ji's rock garden, and Saiho-ji (moss garden, reservation required). Tofuku-ji is stunning if you're there in autumn.",
-      tags: ["itinerary"],
+      tags: ["itinerary", "must-see"],
+      comments: [
+        {
+          id: ids.comment(),
+          content: "Saiho-ji needs a postcard reservation weeks ahead — book first.",
+          createdAt: now,
+        },
+      ],
       childrenIds: [u3a],
     }),
     [u3a]: mk({
