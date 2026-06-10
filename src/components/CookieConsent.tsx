@@ -10,10 +10,11 @@ import { COOKIE_SETTINGS_EVENT, getConsent, setConsent } from "@/lib/consent";
 // opt-out (nothing is captured).
 export function CookieConsent() {
   const posthog = usePostHog();
-  const [visible, setVisible] = useState(false);
+  // Show on first visit (no stored choice). Read once via a lazy initializer so
+  // we don't setState synchronously inside the effect (cascading renders).
+  const [visible, setVisible] = useState(() => getConsent() === null);
 
   useEffect(() => {
-    if (getConsent() === null) setVisible(true);
     const open = () => setVisible(true);
     window.addEventListener(COOKIE_SETTINGS_EVENT, open);
     return () => window.removeEventListener(COOKIE_SETTINGS_EVENT, open);

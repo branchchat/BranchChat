@@ -19,4 +19,13 @@ export default defineConfig([
       globals: globals.browser,
     },
   },
+  {
+    // shadcn/ui primitives intentionally co-locate variant maps (e.g.
+    // `badgeVariants`, `buttonVariants`) with their component. The team accepts
+    // the resulting fast-refresh caveat in these vendored files.
+    files: ['src/components/ui/**'],
+    rules: {
+      'react-refresh/only-export-components': 'off',
+    },
+  },
 ])

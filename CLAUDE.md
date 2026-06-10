@@ -81,7 +81,7 @@ npm.cmd run dev -- --host 127.0.0.1 --port 5173
 .\.venv\Scripts\python.exe -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
-Known lint state: lint currently passes with existing fast-refresh warnings in shadcn/ui component files.
+Known lint state: lint passes clean. The `react-refresh/only-export-components` rule is disabled for `src/components/ui/**` (shadcn/ui primitives that co-locate their variant maps with the component) in `eslint.config.js`.
 
 ## Suggested First Tasks
 
