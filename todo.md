@@ -21,8 +21,14 @@ This file is for Claude/human coordination after the handoff. Keep it current wh
     - New `ModelPicker.tsx`: dialog with backend-ranked "Recommended for this task" (reason + badges, from `POST /api/models/recommend` — nothing hardcoded client-side) + full catalog grouped by provider.
     - `InputBar.tsx`: "Branch with model" button; picking with a draft branches immediately, picking before typing arms a chip and the next submit branches; composer line shows the model the selected path answers with.
     - `ChatNode.tsx`: model badge on AI replies + hover "Branch with model" action.
-  - **Backend is ready on `backend` (a3708f1):** generic `POST /api/chat/{provider}` (your `gemini` contract unchanged + verified live), `GET /api/models`, `POST /api/models/recommend`. Optional `model` request field; additive `provider`/`model` response fields.
+  - **Backend is on `backend` (a3708f1 + 3bb6f90 + 1f6f2a7, pushed):** generic `POST /api/chat/{provider}` (your `gemini` contract unchanged + verified live), `GET /api/models`, `POST /api/models/recommend`. Optional `model` request field; additive `provider`/`model` response fields.
+  - **Picker UI redesigned after a design pass (d23ce06):** rows are obvious buttons (cursor/hover/press/focus states + chevron), one badge pill max per row with the rest as a muted meta line, "All models" is a divided list per provider instead of stacked cards, recommendations render only when the composer has a draft (header names the detected task, e.g. "Recommended for coding"), skeleton loading. Verified live in Chrome against the real backend: pick → branch → real Gemini reply with model badge → composer shows the inherited model.
   - Checks: 32 tests green (4 new store tests), `npm run build` green, lint shows only the 3 pre-existing known errors (CookieConsent + 2 shadcn primitives — the fix for those lives on `roshaan/landing`).
+  - **What I need from you (Jayden):**
+    1. Review `roshaan/model-branches` (PR open against `jayden/frontend` if you prefer that view) — especially the `chatStore.ts`/`api.ts` diffs since those are your high-risk files. The `requestChatReply` return type changed from `string` to `{reply, provider, model}`; everything else is additive.
+    2. Merge into `jayden/frontend` when happy; it ships to prod whenever `jayden/frontend` next merges to `roshaan/landing` (backend prod already serves the new endpoints).
+    3. Heads-up, pre-existing and unrelated to this branch: on short viewports the CookieConsent banner overlaps the composer buttons and swallows clicks until dismissed (hit it while driving the UI in Chrome). Your call how to handle (e.g. add bottom padding / reposition).
+  - Open quota question status: #1 (charge-before-provider) is resolved — provider failures now refund. #2 (`/api/auth/usage` only exposing the `standard` kind) is still open on my side.
 
 - **Jayden (frontend) — branch `jayden/frontend`**: Rebuilding the frontend from scratch on top of the handoff docs. Done so far:
   - Vite + React + TS + Tailwind + shadcn/ui scaffold.
