@@ -71,8 +71,28 @@ export function AppChat() {
         </div>
       </header>
       <VerifyEmailBanner />
-      <div className="flex min-h-0 flex-1">
-        {sidebarOpen && <Toolbar />}
+      <div className="relative flex min-h-0 flex-1">
+        {sidebarOpen && (
+          <>
+            {/* Mobile-only backdrop: tap to dismiss the drawer (it overlays the
+                canvas on small screens; on sm+ the sidebar is an inline column
+                and this is hidden). */}
+            <div
+              className="absolute inset-0 z-20 bg-black/20 sm:hidden"
+              aria-hidden
+              onClick={() => setSidebarOpen(false)}
+            />
+            <Toolbar
+              onNavigate={() => {
+                // On mobile the drawer covers the canvas, so close it after the
+                // user picks a chat / search result.
+                if (window.matchMedia("(max-width: 639px)").matches) {
+                  setSidebarOpen(false)
+                }
+              }}
+            />
+          </>
+        )}
         <div className="flex min-w-0 flex-1 flex-col">
           <main className="min-h-0 flex-1">
             <Canvas />

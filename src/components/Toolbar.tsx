@@ -92,7 +92,7 @@ function groupByWorkspace(
   );
 }
 
-export function Toolbar() {
+export function Toolbar({ onNavigate }: { onNavigate?: () => void } = {}) {
   const chats = useChatStore((s) => s.chats);
   const activeChatId = useChatStore((s) => s.activeChatId);
   const createChat = useChatStore((s) => s.createChat);
@@ -152,7 +152,15 @@ export function Toolbar() {
   };
 
   return (
-    <aside className="flex h-full w-60 shrink-0 flex-col border-r bg-card/40">
+    <aside
+      className={cn(
+        "flex h-full flex-col border-r",
+        // Mobile: float over the canvas as a solid drawer so it never squeezes
+        // the graph. Desktop (sm+): a fixed inline column, translucent as before.
+        "absolute inset-y-0 left-0 z-30 w-[min(85vw,15rem)] bg-card shadow-xl",
+        "sm:relative sm:inset-auto sm:z-auto sm:w-60 sm:shrink-0 sm:bg-card/40 sm:shadow-none",
+      )}
+    >
       <div className="flex items-center justify-between px-3 py-2.5">
         <span className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
           Chats
@@ -201,7 +209,10 @@ export function Toolbar() {
                   <button
                     type="button"
                     className="flex w-full flex-col gap-0.5 rounded-md px-2 py-1.5 text-left hover:bg-muted/60"
-                    onClick={() => openNode(r.chatId, r.nodeId)}
+                    onClick={() => {
+                      openNode(r.chatId, r.nodeId);
+                      onNavigate?.();
+                    }}
                   >
                     <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
                       <span className="truncate">{r.chatTitle}</span>
@@ -254,7 +265,10 @@ export function Toolbar() {
                         <button
                           type="button"
                           className="min-w-0 flex-1 truncate text-left"
-                          onClick={() => switchChat(chat.id)}
+                          onClick={() => {
+                            switchChat(chat.id);
+                            onNavigate?.();
+                          }}
                           title={chat.title}
                         >
                           {chat.title}
