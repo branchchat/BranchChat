@@ -11,8 +11,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ChatApiError, resetPassword } from "@/lib/api";
+import { usePageMeta } from "@/lib/usePageMeta";
 
 export function ResetPassword() {
+  usePageMeta("Reset password · BranchChat");
   const [params] = useSearchParams();
   const token = params.get("token") ?? "";
 

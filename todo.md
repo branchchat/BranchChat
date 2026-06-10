@@ -12,6 +12,8 @@ This file is for Claude/human coordination after the handoff. Keep it current wh
 
 ## Active Work
 
+- **Jayden — SEO P1 follow-ups (2026-06-10, branch `jayden/seo-followups`):** the two routing-layer items from Roshaan's homepage SEO pass. (1) Per-route `<title>`/`<meta description>` via a new `usePageMeta` hook (captures index.html defaults at module load, restores on unmount — never duplicates/touches Roshaan's homepage copy or the verification/OG/JSON-LD tags); applied to privacy/terms/app + the two auth pages. (2) Code-split: lazy-load every route except Landing, so the chat shell (React Flow) splits into its own chunk fetched only on `/app` — landing initial JS 281 kB → 193 kB gzip. Live-verified in Chrome (all route titles + restore-on-nav).
+
 - **Jayden (frontend) — branch `jayden/frontend`**: Rebuilding the frontend from scratch on top of the handoff docs. Done so far:
   - Vite + React + TS + Tailwind + shadcn/ui scaffold.
   - Milestone 2 "data core" — `src/types/chat.ts` (`ChatNode`, `ChatSessionState`) and `src/store/chatStore.ts` (Zustand persisted to `branchchat-storage`, one chat with a root system node, `selectNode` + placeholder `addNode`).

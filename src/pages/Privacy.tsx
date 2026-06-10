@@ -2,8 +2,13 @@ import { Link } from "react-router-dom";
 
 import { LegalLayout, LegalSection } from "@/components/legal/LegalLayout";
 import { LEGAL } from "@/lib/legal";
+import { usePageMeta } from "@/lib/usePageMeta";
 
 export function Privacy() {
+  usePageMeta(
+    "Privacy Policy · BranchChat",
+    "How BranchChat collects, uses, and protects your information.",
+  );
   return (
     <LegalLayout title="Privacy Policy" updated={LEGAL.effectiveDate}>
       <p className="text-sm leading-relaxed text-muted-foreground">
