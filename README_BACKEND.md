@@ -1,5 +1,15 @@
 # Branching Chat Backend
 
+> **STALE HANDOFF DOC — do not build against this.** It describes a
+> pre-rebuild design (server-persisted trees, "agents", an OpenAI SDK
+> default) that was never the shipped backend. The actual backend is
+> stateless (the browser owns the tree) and generic over a provider
+> registry: `POST /api/chat/{provider}` (gemini/openai/anthropic/ollama via
+> raw httpx, validated against `app/services/model_catalog.py`), plus
+> `GET /api/models` and `POST /api/models/recommend`. Current docs:
+> `architecture.md`, `CLAUDE.md`, `docs/backend-security.md`, and
+> `.env.backend.example` for configuration.
+
 Production-ready FastAPI backend for the Branching Chat Interface. Handles tree-based message storage, path reconstruction for context, and multi-agent AI (OpenAI, Gemini).
 
 ## Tech Stack
