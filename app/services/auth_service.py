@@ -8,6 +8,12 @@ Security properties enforced here:
 * **Account lockout.** After ``LOGIN_MAX_FAILED`` failures the account is locked
   for ``LOGIN_LOCKOUT_MINUTES``; while locked, even a correct password fails —
   and still returns the same generic result, so lock state isn't observable.
+* **Durable IP throttle.** Failed attempts are counted from the
+  ``login_attempts`` table (``LOGIN_IP_MAX_FAILED`` per window), so the brake on
+  a single network source spraying many accounts survives restarts and applies
+  across instances — unlike the in-memory per-route limiter.
+* **Sessions die on password change.** ``set_password`` stamps
+  ``password_changed_at``; ``current_user`` rejects tokens issued before it.
 * **Single-use tokens.** Email/reset tokens are matched by SHA-256 hash, checked
   for expiry + prior use, and marked used on consumption.
 
@@ -21,7 +27,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -85,6 +91,44 @@ async def _record_attempt(
     )
 
 
+async def _ip_failures_in_window(session: AsyncSession, ip: str) -> int:
+    """Failed attempts from this network source within the throttle window.
+
+    Counted from the durable ``login_attempts`` table (not process memory) so
+    the brake survives restarts and is shared across instances. Uses the
+    ``(identifier, scope, created_at)`` index.
+    """
+    since = _now() - timedelta(minutes=settings.LOGIN_IP_WINDOW_MINUTES)
+    result = await session.execute(
+        select(func.count())
+        .select_from(LoginAttempt)
+        .where(
+            LoginAttempt.identifier == identity.network_identity(ip),
+            LoginAttempt.scope == "ip",
+            LoginAttempt.success.is_(False),
+            LoginAttempt.created_at > since,
+        )
+    )
+    return int(result.scalar_one())
+
+
+async def _prune_stale_attempts(session: AsyncSession) -> None:
+    """Sweep audit rows past the retention window (indexed ranged delete).
+
+    Called only on SUCCESSFUL logins — rare and user-driven — so attack
+    traffic (failures) can never use the sweep to amplify DB work. 30-day
+    retention is far beyond the 15-minute throttle window.
+    """
+    days = settings.LOGIN_ATTEMPTS_RETENTION_DAYS
+    if days <= 0:
+        return
+    await session.execute(
+        delete(LoginAttempt).where(
+            LoginAttempt.created_at < _now() - timedelta(days=days)
+        )
+    )
+
+
 async def authenticate(
     session: AsyncSession, email: str, password: str, ip: str
 ) -> User | None:
@@ -92,23 +136,33 @@ async def authenticate(
 
     async with rls_tx(session, None):
         user = await get_user_by_email(session, email)
+        ip_throttled = (
+            settings.LOGIN_IP_MAX_FAILED > 0
+            and await _ip_failures_in_window(session, ip)
+            >= settings.LOGIN_IP_MAX_FAILED
+        )
 
     now = _now()
     locked = bool(user and user.locked_until and user.locked_until > now)
+    # IP-throttled requests take the same code path as a lockout: dummy verify
+    # (uniform timing), attempt recorded, uniform failure result — so the
+    # throttle is not observable and can't be used to probe accounts.
+    blocked = locked or ip_throttled
 
     # Always run a verify so timing is identical whether or not the user exists.
-    if user is not None and not locked:
+    if user is not None and not blocked:
         ok = security.verify_password(user.password_hash, password)
     else:
         security.verify_password(security.DUMMY_HASH, password)
         ok = False
 
     async with rls_tx(session, None):
-        await _record_attempt(session, email, ip, success=ok and not locked)
-        if user is not None and not locked:
+        await _record_attempt(session, email, ip, success=ok and not blocked)
+        if user is not None and not blocked:
             if ok:
                 user.failed_login_count = 0
                 user.locked_until = None
+                await _prune_stale_attempts(session)
             else:
                 user.failed_login_count += 1
                 if user.failed_login_count >= settings.LOGIN_MAX_FAILED:
@@ -118,7 +172,7 @@ async def authenticate(
                     user.failed_login_count = 0
             session.add(user)
 
-    return user if (ok and not locked) else None
+    return user if (ok and not blocked) else None
 
 
 async def create_email_token(
@@ -176,6 +230,9 @@ async def set_password(session: AsyncSession, user: User, new_password: str) -> 
     user.password_hash = security.hash_password(new_password)
     user.failed_login_count = 0
     user.locked_until = None
+    # Invalidate every session issued before this moment: a stolen cookie must
+    # not survive a password reset (current_user compares the token's iat).
+    user.password_changed_at = _now()
     session.add(user)
 
 

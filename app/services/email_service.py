@@ -20,7 +20,16 @@ _RESEND_ENDPOINT = "https://api.resend.com/emails"
 
 async def _send(to: str, subject: str, html: str) -> None:
     if not settings.RESEND_API_KEY or not settings.RESEND_FROM_EMAIL:
-        logger.info("[email:dev] to=%s subject=%s\n%s", to, subject, html)
+        if settings.is_production:
+            # The html carries a live verification/reset link — logging it in
+            # production would put account-takeover tokens in the log stream.
+            logger.error(
+                "Email provider not configured in production; dropped %r email "
+                "(recipient and token link withheld from logs).",
+                subject,
+            )
+        else:
+            logger.info("[email:dev] to=%s subject=%s\n%s", to, subject, html)
         return
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:

@@ -13,6 +13,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY app ./app
 COPY alembic ./alembic
 COPY alembic.ini .
+# Supabase CA for full DB TLS verification (set DB_SSL_CA_FILE to this path).
+COPY supabase/prod-ca-2021.crt ./supabase/prod-ca-2021.crt
 
 # Drop root: run the app as an unprivileged user to limit blast radius of any RCE.
 RUN adduser --disabled-password --gecos "" --no-create-home appuser \

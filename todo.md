@@ -141,14 +141,15 @@ source of truth for the tree.
 - [ ] Verify branch creation from collapsed nodes and search navigation into collapsed subtrees.
 - [ ] Check that imported JSON sessions normalize node size/position fields consistently.
 
-### P1 - Security follow-ups (from 2026-06-06 audit, non-blocking for single-instance beta)
+### P1 - Security follow-ups (from 2026-06-06 audit; status updated by the 2026-06-10 pass, see `docs/backend-security.md`)
 
-- [ ] Durable brute-force throttle: count `login_attempts` by IP (or move the limiter to Redis) so the per-IP brake survives restarts/multiple instances. Today: in-memory 10/min + per-account lockout (single-instance only).
-- [ ] Pin the Supabase CA and restore `verify-full` for the DB connection (currently `sslmode=require`/`CERT_NONE` — encrypted but unauthenticated; documented).
-- [ ] Bump FastAPI so Starlette ≥ 0.47.2 (two DoS CVEs are NOT reachable today — no multipart surface — hygiene only).
+- [x] Durable brute-force throttle: `authenticate` now counts failed `login_attempts` per IP-hash (30 per 15 min, configurable; enumeration-safe). Survives restarts and instances. New DB-backed regression test.
+- [x] Supabase CA pinning implemented as opt-in `DB_SSL_CA_FILE` (app + Alembic). **Env action still needed:** download the CA from the Supabase dashboard and set the var in Railway, else TLS stays unverified (a startup warning now flags this).
+- [x] FastAPI/Starlette bumped further than planned after `pip-audit`: fastapi 0.136.3 + starlette 1.0.1, PyJWT 2.13.0, python-dotenv 1.2.2, pytest 9.0.3. `pip-audit` clean. **Run `pip install -r requirements-dev.txt` after pulling.**
 - [ ] Rotate any real `GEMINI_API_KEY` that ever sat in a local `.env` (gitignored, not committed, not in image).
-- [ ] Optional: per-user `token_version`/`jti` for instant session revocation (JWTs are stateless; ≤60-min expiry limits blast radius today).
-- [ ] Set real `ALLOWED_HOSTS` (Host-header validation; default `*` skips `TrustedHostMiddleware`) and confirm `CORS_ORIGINS` in the prod env.
+- [x] Session revocation on password change: `users.password_changed_at` (migration `0003` — **run `alembic upgrade head` together with deploying this code**) + `iat` check in `current_user`. Full logout-all/`jti` denylist still optional later.
+- [ ] Set real `ALLOWED_HOSTS` + `TRUST_PROXY_FORWARDED_IP=true` in the Railway env (startup now warns about both; without the proxy flag, all clients share ONE rate-limit/quota bucket in prod) and confirm `CORS_ORIGINS`.
+- [x] New: `login_attempts` retention: swept on successful logins (`LOGIN_ATTEMPTS_RETENTION_DAYS=30`, indexed by migration `0004`); failures never trigger the sweep.
 
 ### P1 - Auth, Usage, And Billing Readiness
 

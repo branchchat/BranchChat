@@ -35,6 +35,13 @@ def test_production_rejects_short_secret():
         _make(ENV="production", JWT_SECRET_KEY="too-short", ANON_IDENTITY_SALT=STRONG_SALT)
 
 
+def test_production_rejects_sub_32_char_jwt_secret():
+    # HS256 floor is 32 (RFC 7518 §3.2): 16–31 chars passes the old floor but
+    # must now be refused.
+    with pytest.raises(ValidationError):
+        _make(ENV="production", JWT_SECRET_KEY="x" * 31, ANON_IDENTITY_SALT=STRONG_SALT)
+
+
 def test_production_rejects_empty_secret():
     with pytest.raises(ValidationError):
         _make(ENV="production", JWT_SECRET_KEY="", ANON_IDENTITY_SALT=STRONG_SALT)

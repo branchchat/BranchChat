@@ -117,6 +117,57 @@ clean (0 advisories); backend pins are CVE-clean for the reachable surface.
    (enables Host-header validation; default `*` skips `TrustedHostMiddleware`)
    and `CORS_ORIGINS` to the real frontend origins.
 
+## Security audit — 2026-06-10 (follow-up pass)
+
+Closed the open items from the 2026-06-06 audit plus new findings. All 40
+backend tests green against live Postgres; `pip-audit` and `npm audit` clean.
+
+### Fixed this pass
+- **HIGH: reset/verify token links no longer logged in production.** With
+  Resend unconfigured, `email_service` used to log the full email HTML
+  (containing live account-takeover links). Production now logs a redacted
+  error only; dev behavior unchanged. (`app/services/email_service.py`.)
+- **HIGH (opt-in): full DB TLS verification.** New `DB_SSL_CA_FILE` setting
+  pins the Supabase CA and enables verify-full for both the app engine and
+  Alembic. Unset keeps the previous require-mode behavior. (`app/db/session.py`,
+  `alembic/env.py`, `app/core/config.py`.)
+- **MEDIUM: durable per-IP login throttle.** `authenticate` now counts recent
+  failures from the `login_attempts` table (`LOGIN_IP_MAX_FAILED`, default
+  30 per 15 min). Survives restarts, applies across instances, and stays
+  enumeration-safe (dummy verify + uniform 401). (`app/services/auth_service.py`.)
+- **MEDIUM: password reset revokes sessions.** New `users.password_changed_at`
+  (migration `0003`); `current_user` rejects tokens with `iat` older than it.
+  A stolen cookie dies the moment the owner resets. (`app/routers/deps.py`.)
+- **MEDIUM: chunked-body bypass of the size cap.** The old middleware only
+  checked `Content-Length`; a chunked request had no cap at all. Now a
+  pure-ASGI middleware counts the actual received bytes and 413s at the cap.
+  It must stay the INNERMOST middleware (see comment in `app/main.py`).
+- **Hardening:** JWT production floor raised to 32 chars (RFC 7518 for HS256);
+  `personalization` truncated server-side to `MAX_PERSONALIZATION_CHARS`;
+  in-memory rate limiter prunes idle keys (memory growth under IP-spread
+  scans); startup warnings in production for `ALLOWED_HOSTS=*`,
+  `TRUST_PROXY_FORWARDED_IP=false`, missing email provider, unverified DB TLS.
+- **Dependencies:** fastapi 0.136.3 + starlette 1.0.1 (CVE-2025-62727,
+  PYSEC-2026-161), PyJWT 2.13.0 (2025/2026 advisories), python-dotenv 1.2.2,
+  pytest 9.0.3 + pytest-asyncio 1.3.0. `pip-audit`: no known vulnerabilities.
+- **Frontend:** `public/_headers` ships CSP + security headers on Cloudflare
+  Pages; reset/verify tokens are stripped from the address bar
+  (`src/lib/authToken.ts`) and scrubbed from PostHog events (`before_send` in
+  `main.tsx`); session replay now masks email inputs as well as passwords.
+
+### Still open after this pass
+1. Set the production env vars this pass made visible: `DB_SSL_CA_FILE`
+   (download the CA from Supabase), `TRUST_PROXY_FORWARDED_IP=true` on
+   Railway, real `ALLOWED_HOSTS`.
+2. Redis-backed rate limiter before horizontal scaling (unchanged).
+3. ~~`login_attempts` retention job~~ DONE in the follow-up: successful logins
+   sweep rows older than `LOGIN_ATTEMPTS_RETENTION_DAYS` (30; failures never
+   trigger the sweep, so attack traffic can't amplify DB work), backed by the
+   `ix_login_attempts_created` index from migration `0004`.
+4. Run `alembic upgrade head` against production WITH the deploy of this
+   change set: the `User` model now selects `password_changed_at`, so the
+   code must not run against a database that lacks migrations 0003/0004.
+
 ### Required production environment (the boot guard enforces the starred ones)
 `ENV=production`, `JWT_SECRET_KEY`★ (≥32 random), `ANON_IDENTITY_SALT`★ (≥16
 random), `COOKIE_SECURE=true`, `COOKIE_SAMESITE`, `CORS_ORIGINS=https://branch-chat.com,https://www.branch-chat.com`,

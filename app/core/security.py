@@ -63,9 +63,10 @@ def decode_token(token: str) -> dict | None:
             token,
             settings.JWT_SECRET_KEY,
             algorithms=[settings.JWT_ALGORITHM],
-            # Defence in depth: reject tokens missing an expiry or subject even if
-            # they verify, and keep the algorithm allow-list explicit (no "none").
-            options={"require": ["exp", "sub"]},
+            # Defence in depth: reject tokens missing expiry/subject/issued-at
+            # even if they verify, and keep the algorithm allow-list explicit
+            # (no "none"). ``iat`` backs password-change session revocation.
+            options={"require": ["exp", "sub", "iat"]},
         )
     except jwt.PyJWTError:
         return None

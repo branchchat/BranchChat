@@ -8,7 +8,6 @@ connects as the restricted ``app_user`` role at runtime.
 from __future__ import annotations
 
 import asyncio
-import ssl
 from logging.config import fileConfig
 
 from alembic import context
@@ -16,6 +15,7 @@ from sqlalchemy.ext.asyncio import create_async_engine
 
 from app.core.config import settings
 from app.db.base import Base
+from app.db.session import build_db_ssl_context
 
 # Populate Base.metadata with every model for autogenerate.
 import app.models  # noqa: F401
@@ -49,14 +49,11 @@ def _do_run_migrations(connection) -> None:
 
 
 async def run_migrations_online() -> None:
-    # Supabase requires TLS but its pooler uses a private CA; encrypt without CA
-    # verification (sslmode=require). See app/db/session.py:_ssl_context.
+    # Same TLS posture as the app: full verification when DB_SSL_CA_FILE pins
+    # the Supabase CA, otherwise encrypted-but-unverified (sslmode=require).
     connect_args: dict = {}
     if settings.DB_SSL:
-        ctx = ssl.create_default_context()
-        ctx.check_hostname = False
-        ctx.verify_mode = ssl.CERT_NONE
-        connect_args["ssl"] = ctx
+        connect_args["ssl"] = build_db_ssl_context()
     engine = create_async_engine(
         settings.alembic_url, pool_pre_ping=True, connect_args=connect_args
     )

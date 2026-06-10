@@ -34,11 +34,15 @@ class IdentityContext:
         return self.user_id or self.anon_id
 
 
-def _decode_user_id(request: Request) -> str | None:
+def _decode_payload(request: Request) -> dict | None:
     token = request.cookies.get(settings.AUTH_COOKIE_NAME)
     if not token:
         return None
-    payload = security.decode_token(token)
+    return security.decode_token(token)
+
+
+def _decode_user_id(request: Request) -> str | None:
+    payload = _decode_payload(request)
     if not payload:
         return None
     sub = payload.get("sub")
@@ -70,9 +74,16 @@ async def request_identity(request: Request, response: Response) -> IdentityCont
 async def current_user(
     request: Request, session: AsyncSession = Depends(get_db)
 ) -> User:
-    """Require a valid session cookie → loaded ``User``; else 401."""
-    user_id = _decode_user_id(request)
-    if user_id is None:
+    """Require a valid session cookie → loaded ``User``; else 401.
+
+    Tokens issued before the user's last password change are rejected, so a
+    stolen session dies the moment the real owner resets their password
+    (``iat`` is compared at whole-second granularity — the resolution JWT
+    stores — so a login in the same second as the change is not evicted).
+    """
+    payload = _decode_payload(request)
+    user_id = payload.get("sub") if payload else None
+    if payload is None or not isinstance(user_id, str):
         raise HTTPException(
             status.HTTP_401_UNAUTHORIZED, detail="Not authenticated."
         )
@@ -82,4 +93,12 @@ async def current_user(
         raise HTTPException(
             status.HTTP_401_UNAUTHORIZED, detail="Not authenticated."
         )
+    if user.password_changed_at is not None:
+        iat = payload.get("iat")
+        if not isinstance(iat, (int, float)) or int(iat) < int(
+            user.password_changed_at.timestamp()
+        ):
+            raise HTTPException(
+                status.HTTP_401_UNAUTHORIZED, detail="Not authenticated."
+            )
     return user

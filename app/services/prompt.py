@@ -12,6 +12,7 @@ payload can't blow up the prompt.
 
 from __future__ import annotations
 
+from app.core.config import settings
 from app.schemas.chat import LinkedContextBlock, ProviderMessage
 
 DEFAULT_SYSTEM_INSTRUCTION = (
@@ -85,7 +86,10 @@ def build_system_instruction(
     if coding_mode:
         parts.append(CODING_APPENDIX)
     if personalization:
-        parts.append(f"\n\nAbout the user / preferred style:\n{personalization.strip()}")
+        # Server-side cap (the schema allows more headroom): personalization is
+        # caller-controlled text injected into the system prompt, so bound it.
+        trimmed = personalization.strip()[: settings.MAX_PERSONALIZATION_CHARS]
+        parts.append(f"\n\nAbout the user / preferred style:\n{trimmed}")
     linked = format_linked_blocks(linked_context)
     if linked:
         parts.append(LINKED_CONTEXT_RULES)

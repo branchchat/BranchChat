@@ -26,8 +26,11 @@ from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 # lets anyone reverse the anon-identity hashes.
 _DEV_JWT_SECRET = "dev-insecure-change-me"
 _DEV_ANON_SALT = "dev-insecure-anon-salt"
-# Floor for a real HMAC secret / salt in production.
-_MIN_SECRET_LENGTH = 16
+# Production floors. HS256 needs a key at least as long as its output (32
+# bytes, RFC 7518 §3.2 — PyJWT ≥2.13 warns below this); the anon salt is a
+# privacy HMAC where 16 random chars remain adequate.
+_MIN_JWT_SECRET_LENGTH = 32
+_MIN_SALT_LENGTH = 16
 
 
 class Settings(BaseSettings):
@@ -50,6 +53,11 @@ class Settings(BaseSettings):
     # statements are unsafe across pooled server connections, so disable them.
     DB_USE_PGBOUNCER: bool = False
     DB_SSL: bool = False
+    # Path to a CA bundle (PEM) to fully verify the DB server's certificate
+    # (verify-full). Unset → encrypted but UNVERIFIED TLS (sslmode=require),
+    # accepted only because Supabase's pooler uses a private CA; download that
+    # CA from the Supabase dashboard and set this to close the MITM gap.
+    DB_SSL_CA_FILE: str | None = None
     DB_POOL_SIZE: int = 10
     DB_MAX_OVERFLOW: int = 10  # → 10..20 total connections, per the brief
     DB_POOL_TIMEOUT: int = 30
@@ -96,6 +104,16 @@ class Settings(BaseSettings):
     LOGIN_MAX_FAILED: int = 5
     LOGIN_LOCKOUT_MINUTES: int = 15
     PASSWORD_MIN_LENGTH: int = 12
+    # Durable per-IP brake counted from the login_attempts table, so it survives
+    # restarts and applies across instances (the in-memory limiter does neither).
+    # Generous vs. the per-account lockout: it only exists to stop one network
+    # source spraying failures across MANY accounts. 0 disables.
+    LOGIN_IP_MAX_FAILED: int = 30
+    LOGIN_IP_WINDOW_MINUTES: int = 15
+    # Audit-row retention: attempts older than this are swept on successful
+    # logins (far beyond any throttle window; the table holds no PII — hashed
+    # identifiers only). 0 disables the sweep.
+    LOGIN_ATTEMPTS_RETENTION_DAYS: int = 30
 
     # -- Email (Resend) + token TTLs ----------------------------------------
     RESEND_API_KEY: str | None = None
@@ -153,16 +171,16 @@ class Settings(BaseSettings):
         if not self.is_production:
             return self
         problems: list[str] = []
-        for name, dev_default in (
-            ("JWT_SECRET_KEY", _DEV_JWT_SECRET),
-            ("ANON_IDENTITY_SALT", _DEV_ANON_SALT),
+        for name, dev_default, min_length in (
+            ("JWT_SECRET_KEY", _DEV_JWT_SECRET, _MIN_JWT_SECRET_LENGTH),
+            ("ANON_IDENTITY_SALT", _DEV_ANON_SALT, _MIN_SALT_LENGTH),
         ):
             value = getattr(self, name)
             if not value or value == dev_default:
                 problems.append(f"{name} is unset or still the insecure dev default")
-            elif len(value) < _MIN_SECRET_LENGTH:
+            elif len(value) < min_length:
                 problems.append(
-                    f"{name} must be at least {_MIN_SECRET_LENGTH} characters"
+                    f"{name} must be at least {min_length} characters"
                 )
         if problems:
             raise ValueError(

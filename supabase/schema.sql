@@ -35,10 +35,14 @@ create table if not exists users (
   email_verified     boolean not null default false,
   failed_login_count integer not null default 0,
   locked_until       timestamptz,
+  -- Sessions issued before this are rejected (password-change revocation).
+  password_changed_at timestamptz,
   created_at         timestamptz not null default now(),
   updated_at         timestamptz not null default now()
 );
 create unique index if not exists uq_users_email on users (email);
+-- Idempotent catch-up for databases bootstrapped before migration 0003.
+alter table users add column if not exists password_changed_at timestamptz;
 
 create table if not exists email_tokens (
   id          uuid primary key default gen_random_uuid(),
@@ -86,6 +90,10 @@ create table if not exists login_attempts (
 );
 create index if not exists ix_login_attempts_lookup
   on login_attempts (identifier, scope, created_at);
+-- Bare created_at index: keeps the retention sweep (delete of rows older than
+-- LOGIN_ATTEMPTS_RETENTION_DAYS, run on successful logins) a cheap ranged delete.
+create index if not exists ix_login_attempts_created
+  on login_attempts (created_at);
 
 -- Privileges -----------------------------------------------------------------
 -- Lock our tables away from Supabase's public API roles, grant the backend role.

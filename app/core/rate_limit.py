@@ -34,15 +34,29 @@ class RateLimiter(Protocol):
 class InMemoryRateLimiter:
     """Sliding-window counter kept in process memory.
 
-    Keys are bounded by distinct (bucket, IP) pairs and entries self-expire as
-    their window slides, so memory stays proportional to active clients.
+    Entries self-expire as their window slides, and a periodic sweep drops
+    keys idle for over an hour — otherwise an attacker rotating source IPs
+    would grow the dict without bound (a slow memory-exhaustion vector).
     """
+
+    # Sweep cadence (hits between sweeps) and how long a key may sit idle.
+    _SWEEP_EVERY = 4096
+    _IDLE_SECONDS = 3600.0
 
     def __init__(self) -> None:
         self._hits: dict[str, deque[float]] = defaultdict(deque)
+        self._ops = 0
+
+    def _sweep(self, now: float) -> None:
+        stale = now - self._IDLE_SECONDS
+        for key in [k for k, dq in self._hits.items() if not dq or dq[-1] < stale]:
+            del self._hits[key]
 
     async def hit(self, key: str, limit: int, window_seconds: int) -> bool:
         now = time.time()
+        self._ops += 1
+        if self._ops % self._SWEEP_EVERY == 0:
+            self._sweep(now)
         cutoff = now - window_seconds
         dq = self._hits[key]
         while dq and dq[0] < cutoff:

@@ -214,6 +214,101 @@ def test_invalid_reset_token_rejected(client):
     assert r.status_code == 400
 
 
+def test_password_reset_invalidates_existing_sessions(client, mail):
+    """A stolen session cookie must die when the owner resets their password."""
+    import time
+
+    _signup(client)
+    r = client.post(
+        "/api/auth/login", json={"email": "new@example.com", "password": PASSWORD}
+    )
+    assert r.status_code == 200
+    assert client.get("/api/auth/me").status_code == 200
+
+    # Cross a whole-second boundary: revocation compares the token's iat
+    # (second resolution) against password_changed_at.
+    time.sleep(1.1)
+
+    client.post("/api/auth/request-password-reset", json={"email": "new@example.com"})
+    assert (
+        client.post(
+            "/api/auth/reset-password",
+            json={"token": mail["reset"], "password": NEW_PASSWORD},
+        ).status_code
+        == 200
+    )
+
+    # The pre-reset session cookie is still in the jar — now rejected.
+    assert client.get("/api/auth/me").status_code == 401
+
+    # Logging in with the new password issues a fresh, working session.
+    assert (
+        client.post(
+            "/api/auth/login",
+            json={"email": "new@example.com", "password": NEW_PASSWORD},
+        ).status_code
+        == 200
+    )
+    assert client.get("/api/auth/me").status_code == 200
+
+
+def test_ip_throttle_after_spraying_many_accounts(client, mail, monkeypatch):
+    """Failures across DIFFERENT accounts from one source trip the durable
+    DB-backed throttle — and the response stays the generic 401."""
+    monkeypatch.setattr(settings, "LOGIN_IP_MAX_FAILED", 3)
+
+    _signup(client)  # the real account the attacker eventually guesses right on
+    for i in range(3):
+        r = client.post(
+            "/api/auth/login",
+            json={"email": f"ghost{i}@example.com", "password": "wrong-pass-1234"},
+        )
+        assert r.status_code == 401
+
+    # Correct credentials, but the source is throttled: same generic failure.
+    r = client.post(
+        "/api/auth/login", json={"email": "new@example.com", "password": PASSWORD}
+    )
+    assert r.status_code == 401
+    assert r.json()["detail"] == "Invalid email or password."
+
+    # The brake is the durable table, not process memory: clearing it (as the
+    # window expiring would) restores access for the legitimate user.
+    _run(_admin("TRUNCATE login_attempts"))
+    r = client.post(
+        "/api/auth/login", json={"email": "new@example.com", "password": PASSWORD}
+    )
+    assert r.status_code == 200
+
+
+def test_stale_login_attempts_pruned_on_successful_login(client, mail):
+    """Audit rows past LOGIN_ATTEMPTS_RETENTION_DAYS are swept by a successful
+    login; rows inside the window (throttle evidence) are kept."""
+    _signup(client)
+    _run(
+        _admin(
+            "INSERT INTO login_attempts (identifier, scope, success, created_at) VALUES "
+            "('stale-row-hash', 'ip', false, now() - interval '40 days'), "
+            "('fresh-row-hash', 'ip', false, now() - interval '1 hour')"
+        )
+    )
+
+    r = client.post(
+        "/api/auth/login", json={"email": "new@example.com", "password": PASSWORD}
+    )
+    assert r.status_code == 200
+
+    rows = _run(
+        _admin(
+            "SELECT identifier FROM login_attempts "
+            "WHERE identifier IN ('stale-row-hash', 'fresh-row-hash')"
+        )
+    )
+    kept = {row[0] for row in rows}
+    assert "stale-row-hash" not in kept
+    assert "fresh-row-hash" in kept
+
+
 def test_me_requires_authentication(client):
     assert client.get("/api/auth/me").status_code == 401
 

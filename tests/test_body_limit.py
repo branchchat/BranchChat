@@ -21,3 +21,21 @@ def test_rejects_oversized_body(client, monkeypatch):
     # Rejected by the size gate before routing/DB, so this never touches the table.
     assert resp.status_code == 413
     assert resp.json()["detail"] == "Request body too large."
+
+
+def test_rejects_oversized_chunked_body(client, monkeypatch):
+    """A chunked request carries no Content-Length — the streamed byte counter
+    must still stop it at the cap (the header check alone is bypassable)."""
+    monkeypatch.setattr(settings, "MAX_REQUEST_BODY_BYTES", 50)
+
+    def chunks():
+        for _ in range(10):
+            yield b"x" * 20  # 200 bytes total, no Content-Length header
+
+    resp = client.post(
+        "/api/waitlist",
+        content=chunks(),
+        headers={"content-type": "application/json"},
+    )
+    assert resp.status_code == 413
+    assert resp.json()["detail"] == "Request body too large."
