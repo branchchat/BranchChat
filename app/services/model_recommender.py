@@ -178,6 +178,10 @@ def recommend_models(
             score += 0.15 * model.task_score("reasoning")
 
         reason = _REASON_BY_TASK[dominant]
+        # Differentiate per model: identical task copy across three cards
+        # reads like filler, so name what THIS model brings.
+        if model.strengths:
+            reason += f" Stands out for {', '.join(model.strengths[:2])}."
         if fit > 0:
             reason += " Its large context window suits this long branch."
         elif fit < 0:
