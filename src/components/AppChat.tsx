@@ -7,19 +7,22 @@
 // landing page sits outside this subtree and stays visible.
 
 import { useState } from "react"
-import { PanelLeft } from "lucide-react"
+import { GitCompare, PanelLeft } from "lucide-react"
 import { Link } from "react-router-dom"
 
 import { AuthControls } from "@/components/AuthControls"
 import { Canvas } from "@/components/Canvas"
+import { CompareView } from "@/components/CompareView"
 import { InputBar } from "@/components/InputBar"
 import { Toolbar } from "@/components/Toolbar"
 import { UsageMeter } from "@/components/UsageMeter"
 import { VerifyEmailBanner } from "@/components/VerifyEmailBanner"
 import { Button } from "@/components/ui/button"
+import { useChatStore } from "@/store/chatStore"
 
 export function AppChat() {
   const [sidebarOpen, setSidebarOpen] = useState(true)
+  const openCompare = useChatStore((s) => s.openCompare)
 
   return (
     <div className="ph-mask flex h-svh flex-col">
@@ -37,6 +40,15 @@ export function AppChat() {
           <h1 className="text-sm font-semibold tracking-tight">BranchChat</h1>
         </div>
         <div className="flex items-center gap-3">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="gap-1.5"
+            onClick={openCompare}
+          >
+            <GitCompare className="size-4" />
+            Compare
+          </Button>
           <UsageMeter />
           <AuthControls />
           <Link
@@ -59,6 +71,7 @@ export function AppChat() {
           </footer>
         </div>
       </div>
+      <CompareView />
     </div>
   )
 }
