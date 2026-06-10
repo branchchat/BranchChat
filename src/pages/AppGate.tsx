@@ -5,8 +5,13 @@ import { AppChat } from "@/components/AppChat";
 import { Brand } from "@/components/landing/Brand";
 import { checkUrlKey, hasDevAccess, tryPassphrase } from "@/lib/devAccess";
 import { cn } from "@/lib/utils";
+import { usePageMeta } from "@/lib/usePageMeta";
 
 export function AppGate() {
+  // Distinct title so the gated app doesn't inherit the marketing homepage
+  // title (the /app route is Disallow'ed in robots.txt — no description needed).
+  usePageMeta("BranchChat App");
+
   // Unlock from a stored flag, or from /app?key=<passphrase> on first load.
   const [unlocked, setUnlocked] = useState(
     () => hasDevAccess() || checkUrlKey(),

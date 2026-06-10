@@ -8,6 +8,7 @@ import { Link } from "react-router-dom";
 import { AuthPage } from "@/pages/AuthPage";
 import { Button } from "@/components/ui/button";
 import { ChatApiError, verifyEmail } from "@/lib/api";
+import { usePageMeta } from "@/lib/usePageMeta";
 import { useAuthStore } from "@/store/authStore";
 
 type Status =
@@ -21,6 +22,7 @@ type Status =
 const attempted = new Set<string>();
 
 export function VerifyEmail() {
+  usePageMeta("Verify email · BranchChat");
   const token = new URLSearchParams(window.location.search).get("token") ?? "";
   const hydrate = useAuthStore((s) => s.hydrate);
   // Derive the no-token error during render (avoids a synchronous setState in
