@@ -21,3 +21,30 @@ export function formatRelativeTime(ts: number, now = Date.now()): string {
     day: "numeric",
   })
 }
+
+// Trigger a browser download of `text` as a file. Used to export a chat session
+// to JSON. Revokes the object URL after the click so it doesn't leak.
+export function downloadTextFile(
+  filename: string,
+  text: string,
+  type = "application/json",
+): void {
+  const url = URL.createObjectURL(new Blob([text], { type }))
+  const a = document.createElement("a")
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  URL.revokeObjectURL(url)
+}
+
+// Filesystem-safe slug from a chat title for export filenames.
+export function slugifyFilename(name: string, fallback = "chat"): string {
+  const slug = name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 60)
+  return slug || fallback
+}

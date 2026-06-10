@@ -19,6 +19,7 @@ import {
 } from "@/lib/api";
 import { useAuthStore } from "@/store/authStore";
 import { buildDemoChat } from "@/lib/demoChat";
+import { parseSession } from "@/lib/sessionTransfer";
 import type {
   ChatNode,
   ChatSessionState,
@@ -369,6 +370,12 @@ export interface ChatStoreState {
   // Append a comment to a node (trimmed; no-op if empty).
   addComment: (nodeId: string, content: string) => void;
   removeComment: (nodeId: string, commentId: string) => void;
+
+  // Import a conversation from a session-export JSON string: validates +
+  // normalizes it (see sessionTransfer), assigns a fresh chat id, and switches
+  // to it. Returns the new chat id; throws Error (user-facing message) on a
+  // malformed file.
+  importChat: (text: string) => string;
 
   // Low-level helper retained from Milestone 2 (used by tests/console).
   addNode: (
@@ -816,6 +823,26 @@ export const useChatStore = create<ChatStoreState>()(
             );
             return { comments: comments.length ? comments : undefined };
           }),
+
+        importChat: (text) => {
+          // parseSession throws a user-facing Error on bad input; let it
+          // propagate so the Toolbar can show the message.
+          const sanitized = parseSession(text);
+          const id = createChatId();
+          const chat: ChatSessionState = {
+            ...sanitized,
+            id,
+            activePath: computeActivePath(
+              sanitized.nodes,
+              sanitized.selectedNodeId,
+            ),
+          };
+          set((state) => ({
+            chats: { ...state.chats, [id]: chat },
+            activeChatId: id,
+          }));
+          return id;
+        },
 
         addNode: (parentId, init) => {
           let createdId: string | null = null;
