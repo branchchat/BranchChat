@@ -31,11 +31,24 @@ export interface ChatRequest {
   linked_context: LinkedContextBlock[];
   coding_mode: boolean;
   personalization?: string;
+  // Optional model override for model-specific branches. Absent = the
+  // provider's server-side default (the original behaviour).
+  model?: string;
 }
 
 interface ChatResponse {
   node_id?: string;
   reply?: string;
+  provider?: string;
+  model?: string;
+}
+
+// What the backend reports actually generated the reply (the model can differ
+// from the request when the provider fell back internally).
+export interface ChatReplyResult {
+  reply: string;
+  provider?: string;
+  model?: string;
 }
 
 export class ChatApiError extends Error {
@@ -47,13 +60,16 @@ export class ChatApiError extends Error {
   }
 }
 
-// POST to /api/chat/{provider} and return the reply text. Throws ChatApiError
-// on non-2xx (surfacing the backend's `detail`, e.g. a 429 quota message).
+// POST to /api/chat/{provider} and return the reply (plus which provider/
+// model generated it). Throws ChatApiError on non-2xx (surfacing the
+// backend's `detail`, e.g. a 429 quota message). `provider` defaults to the
+// env-configured one, so callers without a branch override behave as before.
 export async function requestChatReply(
   req: ChatRequest,
-  signal?: AbortSignal,
-): Promise<string> {
-  const endpoint = `${API_BASE}/api/chat/${PROVIDER}`;
+  opts?: { provider?: string; signal?: AbortSignal },
+): Promise<ChatReplyResult> {
+  const provider = opts?.provider ?? PROVIDER;
+  const endpoint = `${API_BASE}/api/chat/${encodeURIComponent(provider)}`;
 
   let res: Response;
   try {
@@ -62,7 +78,7 @@ export async function requestChatReply(
       headers: { "Content-Type": "application/json" },
       credentials: "include",
       body: JSON.stringify(req),
-      signal,
+      signal: opts?.signal,
     });
   } catch {
     throw new ChatApiError(
@@ -83,7 +99,132 @@ export async function requestChatReply(
   }
 
   const data = (await res.json()) as ChatResponse;
-  return data.reply ?? "";
+  return {
+    reply: data.reply ?? "",
+    provider: data.provider,
+    model: data.model,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// model registry + recommendations (shapes from app/schemas/models.py)
+// ---------------------------------------------------------------------------
+
+export interface ModelInfo {
+  provider: string;
+  id: string;
+  label: string;
+  description: string;
+  strengths: string[];
+  weaknesses: string[];
+  context_window: number;
+  multimodal: boolean;
+  speed: "fast" | "medium" | "slow";
+  cost_tier: "low" | "medium" | "high";
+  badges: string[];
+  is_default: boolean;
+}
+
+export interface ProviderStatus {
+  name: string;
+  configured: boolean;
+}
+
+export interface ModelsResponse {
+  models: ModelInfo[];
+  providers: ProviderStatus[];
+}
+
+export interface ModelRecommendation {
+  provider: string;
+  model: string;
+  label: string;
+  reason: string;
+  score: number;
+  badges: string[];
+  task: string;
+}
+
+export interface RecommendRequest {
+  message: string;
+  context_sample?: string;
+  context_chars?: number;
+  coding_mode?: boolean;
+  preference?: "quality" | "speed" | "cost";
+}
+
+// The model catalog changes rarely, so cache it for the session; the cache
+// also backs the synchronous `modelLabel` lookup used by node badges.
+let modelsCache: ModelsResponse | null = null;
+let modelsCachePromise: Promise<ModelsResponse> | null = null;
+
+// GET /api/models — available models + provider availability. Cached.
+export function fetchAvailableModels(
+  signal?: AbortSignal,
+): Promise<ModelsResponse> {
+  if (modelsCache) return Promise.resolve(modelsCache);
+  if (modelsCachePromise) return modelsCachePromise;
+
+  modelsCachePromise = (async () => {
+    const res = await fetch(`${API_BASE}/api/models`, {
+      credentials: "include",
+      signal,
+    });
+    if (!res.ok) {
+      throw new ChatApiError(
+        `Request failed (HTTP ${res.status}).`,
+        res.status,
+      );
+    }
+    modelsCache = (await res.json()) as ModelsResponse;
+    return modelsCache;
+  })();
+  // A failed fetch must not poison the cache; the next call retries.
+  modelsCachePromise.catch(() => {
+    modelsCachePromise = null;
+  });
+  return modelsCachePromise;
+}
+
+// Test seam: reset the module-level cache between tests.
+export function clearModelsCache(): void {
+  modelsCache = null;
+  modelsCachePromise = null;
+}
+
+// Synchronous display-label lookup from the cache; falls back to the raw id
+// before the catalog has loaded (or in stub mode).
+export function modelLabel(
+  provider: string | undefined,
+  model: string | undefined,
+): string | null {
+  if (!model) return null;
+  const hit = modelsCache?.models.find(
+    (m) => m.id === model && (!provider || m.provider === provider),
+  );
+  return hit?.label ?? model;
+}
+
+// POST /api/models/recommend — backend-ranked models for the user's task.
+// Never hardcode recommendations client-side; render what this returns.
+export async function fetchModelRecommendations(
+  req: RecommendRequest,
+  signal?: AbortSignal,
+): Promise<ModelRecommendation[]> {
+  const res = await fetch(`${API_BASE}/api/models/recommend`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(req),
+    signal,
+  });
+  if (!res.ok) {
+    throw new ChatApiError(`Request failed (HTTP ${res.status}).`, res.status);
+  }
+  const data = (await res.json()) as {
+    recommendations?: ModelRecommendation[];
+  };
+  return data.recommendations ?? [];
 }
 
 // ---------------------------------------------------------------------------

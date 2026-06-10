@@ -12,6 +12,18 @@ This file is for Claude/human coordination after the handoff. Keep it current wh
 
 ## Active Work
 
+- **Roshaan — model-specific branches (2026-06-10, THIS branch `roshaan/model-branches`, off your latest `jayden/frontend`) — @Jayden please review/merge:**
+  - **Feature:** "Branch with model" — branch from any message and pick the AI (OpenAI / Anthropic / Gemini / local) for that branch. The branch inherits the conversation above the branch point via your existing `buildHistoryForNode` (unchanged); nested branches can each pick their own model (nearest-ancestor override wins, `resolveModelForNode`).
+  - **Your high-risk files were touched** (`chatStore.ts`, `api.ts`, `types/chat.ts`, `InputBar.tsx`, `ChatNode.tsx`), which is why this sits on its own branch for your review instead of going into `jayden/frontend` directly. Summary of changes:
+    - `types/chat.ts`: `ModelChoice`; `ChatNode` gains optional `modelOverride` (set on a branch's first user node) and `provider`/`model` (stamped on assistant nodes from the response). Persisted saves: only optional fields added, v1 loads unchanged, no migration needed.
+    - `api.ts`: `requestChatReply(req, {provider, signal})` now returns `{reply, provider, model}` (was a bare string); request body gains optional `model`. New: `fetchAvailableModels` (cached) + `fetchModelRecommendations` + sync `modelLabel` lookup. Old behaviour identical when no override (still defaults to `VITE_PROVIDER`).
+    - `chatStore.ts`: `branchFromNode(parent, msg, {model})` stamps the override + journals it; `requestAssistantReply` resolves the branch model and stamps the reply's actual provider/model; transient `modelPickerFor` + `openModelPicker`/`closeModelPicker` (not persisted).
+    - New `ModelPicker.tsx`: dialog with backend-ranked "Recommended for this task" (reason + badges, from `POST /api/models/recommend` — nothing hardcoded client-side) + full catalog grouped by provider.
+    - `InputBar.tsx`: "Branch with model" button; picking with a draft branches immediately, picking before typing arms a chip and the next submit branches; composer line shows the model the selected path answers with.
+    - `ChatNode.tsx`: model badge on AI replies + hover "Branch with model" action.
+  - **Backend is ready on `backend` (a3708f1):** generic `POST /api/chat/{provider}` (your `gemini` contract unchanged + verified live), `GET /api/models`, `POST /api/models/recommend`. Optional `model` request field; additive `provider`/`model` response fields.
+  - Checks: 32 tests green (4 new store tests), `npm run build` green, lint shows only the 3 pre-existing known errors (CookieConsent + 2 shadcn primitives — the fix for those lives on `roshaan/landing`).
+
 - **Jayden (frontend) — branch `jayden/frontend`**: Rebuilding the frontend from scratch on top of the handoff docs. Done so far:
   - Vite + React + TS + Tailwind + shadcn/ui scaffold.
   - Milestone 2 "data core" — `src/types/chat.ts` (`ChatNode`, `ChatSessionState`) and `src/store/chatStore.ts` (Zustand persisted to `branchchat-storage`, one chat with a root system node, `selectNode` + placeholder `addNode`).

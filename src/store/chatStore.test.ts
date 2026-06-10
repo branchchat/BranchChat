@@ -1,7 +1,11 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { migratePersistedState, useChatStore } from "@/store/chatStore";
+import {
+  migratePersistedState,
+  resolveModelForNode,
+  useChatStore,
+} from "@/store/chatStore";
 
 const store = () => useChatStore.getState();
 
@@ -77,5 +81,99 @@ describe("chat management actions", () => {
       chatId: id,
       nodeId: someNode.id,
     });
+  });
+});
+
+describe("model-specific branches", () => {
+  const GEMINI = {
+    provider: "gemini",
+    model: "gemini-2.5-pro",
+    label: "Gemini 2.5 Pro",
+  };
+  const CLAUDE = {
+    provider: "anthropic",
+    model: "claude-fable-5",
+    label: "Claude Fable 5",
+  };
+
+  beforeEach(() => {
+    localStorage.clear();
+    store().createChat({ title: "model branches" });
+  });
+
+  const activeChat = () => store().chats[store().activeChatId];
+
+  it("branchFromNode stamps the override on the branch's first user node and journals it", () => {
+    const root = activeChat().rootId;
+    const result = store().branchFromNode(root, "try this with gemini", {
+      model: GEMINI,
+    })!;
+
+    const userNode = activeChat().nodes[result.userId];
+    expect(userNode.modelOverride).toEqual(GEMINI);
+    // The loading assistant node carries no override of its own; it INHERITS.
+    expect(activeChat().nodes[result.assistantId].modelOverride).toBeUndefined();
+
+    const lastJournal = activeChat().journalEntries.at(-1)!;
+    expect(lastJournal.type).toBe("branch");
+    expect(lastJournal.message).toContain("Gemini 2.5 Pro");
+  });
+
+  it("resolveModelForNode walks up to the nearest ancestor override", () => {
+    const root = activeChat().rootId;
+    const branch = store().branchFromNode(root, "gemini branch", {
+      model: GEMINI,
+    })!;
+
+    // The assistant node and any continuation under it inherit the branch model.
+    expect(resolveModelForNode(activeChat().nodes, branch.assistantId)).toEqual(
+      GEMINI,
+    );
+    const continuation = store().addUserMessage(
+      "continue here",
+      branch.assistantId,
+    )!;
+    expect(
+      resolveModelForNode(activeChat().nodes, continuation.assistantId),
+    ).toEqual(GEMINI);
+
+    // Nodes outside the branch (the root path) resolve to the app default.
+    expect(resolveModelForNode(activeChat().nodes, root)).toBeNull();
+  });
+
+  it("nested branches override the outer branch's model", () => {
+    const root = activeChat().rootId;
+    const gemini = store().branchFromNode(root, "gemini branch", {
+      model: GEMINI,
+    })!;
+    const claude = store().branchFromNode(
+      gemini.assistantId,
+      "now ask claude",
+      { model: CLAUDE },
+    )!;
+
+    // Deeper override wins on the nested path…
+    expect(resolveModelForNode(activeChat().nodes, claude.assistantId)).toEqual(
+      CLAUDE,
+    );
+    // …while the outer branch keeps its own model.
+    expect(resolveModelForNode(activeChat().nodes, gemini.userId)).toEqual(
+      GEMINI,
+    );
+  });
+
+  it("sibling branches do not affect each other's model", () => {
+    const root = activeChat().rootId;
+    const withModel = store().branchFromNode(root, "model branch", {
+      model: CLAUDE,
+    })!;
+    const plain = store().branchFromNode(root, "plain branch")!;
+
+    expect(
+      resolveModelForNode(activeChat().nodes, withModel.assistantId),
+    ).toEqual(CLAUDE);
+    expect(
+      resolveModelForNode(activeChat().nodes, plain.assistantId),
+    ).toBeNull();
   });
 });
