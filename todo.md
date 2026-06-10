@@ -217,6 +217,34 @@ source of truth for the tree.
 - [ ] Add an "open selected branch in focused view" mode for long conversations where full-tree zoom makes text hard to read.
 - [ ] **@Jayden — auto-pan/center the canvas to the newest node after Send/Branch.** Found 2026-06-08 while verifying the prod chat fix: a new reply (or an `isError` node) is created and rendered correctly, but the viewport stays put, so on a tall tree the new node lands below the fold and looks like "nothing happened" (sent a message, got a real "Four" reply, but had to scroll to see it). Error handling itself is fine (failed sends flip to the red `isError` node with the backend `detail`). Just center/scroll-into-view the freshly added assistant node when it resolves.
 
+### P1 - SEO follow-ups (from the 2026-06-10 homepage SEO pass — @Jayden)
+
+Context: the homepage SEO is done + live (meta/OG/Twitter/canonical/JSON-LD in `index.html`,
+`robots.txt` + `sitemap.xml` + `og-image.png` in `public/`, GSC + Bing both verified, `www`
+301s to apex). What's left is in the frontend routing layer, which is your area.
+
+- [ ] ⚠️ **DO NOT remove the two verification meta tags in `index.html` head** —
+  `<meta name="google-site-verification" ...>` and `<meta name="msvalidate.01" ...>`. Removing
+  either drops our Google / Bing verification. Same for the `og:*`, `twitter:*`, `canonical`,
+  `description`, and the JSON-LD `<script>` block — they're all static-head SEO, keep them.
+- [ ] **Per-route `<title>` + `<meta name="description">` for `/privacy`, `/terms`, `/app`.**
+  Right now every route inherits the homepage title ("BranchChat - Branch, Compare, and Map AI
+  Conversations") and description because it's an SPA and only `index.html` is served. Give each
+  route its own title/description (React 19 supports rendering `<title>`/`<meta>` straight from a
+  component, or use a tiny head effect — no react-helmet needed). Suggested:
+  - `/privacy` → "Privacy Policy · BranchChat"
+  - `/terms` → "Terms of Service · BranchChat"
+  - `/app` → keep it noindex-friendly; it's already `Disallow`ed in robots.txt, but a distinct
+    title like "BranchChat App" avoids the canonical homepage title leaking onto the gated app.
+  Leave the canonical tag pointing at `https://branch-chat.com/` on the homepage only — if you add
+  per-route canonicals later, make each self-referential.
+- [ ] **Code-split the main bundle for Core Web Vitals.** Production build warns the entry chunk is
+  ~861 kB (278 kB gzip), over Vite's 500 kB threshold. The landing page pulls in the whole app
+  (React Flow / `@xyflow/react`, motion, the chat shell) even though `/` only needs the marketing
+  page. Lazy-load the `/app` route (`React.lazy` + `Suspense` on the `AppGate`/`AppChat` import in
+  `App.tsx`) so React Flow & the chat code split out of the initial load — biggest LCP/INP win for
+  the landing page, which is the page that actually gets indexed.
+
 ### P1 - Social pipeline UI screenshots (@Jayden's Claude — please action)
 
 Roshaan set up an automated social-media content pipeline. A snapshot is now on
