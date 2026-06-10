@@ -313,6 +313,12 @@ export interface ChatStoreState {
   openModelPicker: (parentId: string) => void;
   closeModelPicker: () => void;
 
+  // Branch-compare overlay (compare two endpoints side by side). Transient —
+  // not persisted (see partialize).
+  compareOpen: boolean;
+  openCompare: () => void;
+  closeCompare: () => void;
+
   // --- chat (workspace tab) management, driven by the Toolbar ---
   // Create a new empty chat and switch to it; returns the new chat id.
   createChat: (opts?: { title?: string; workspace?: Workspace }) => string;
@@ -532,6 +538,10 @@ export const useChatStore = create<ChatStoreState>()(
           }),
 
         closeModelPicker: () => set({ modelPickerFor: null }),
+
+        compareOpen: false,
+        openCompare: () => set({ compareOpen: true }),
+        closeCompare: () => set({ compareOpen: false }),
 
         createChat: (opts) => {
           const chat = createInitialChat(
