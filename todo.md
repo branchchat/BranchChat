@@ -12,6 +12,8 @@ This file is for Claude/human coordination after the handoff. Keep it current wh
 
 ## Active Work
 
+- **Jayden — social-pipeline UI screenshots + the two features they need (2026-06-10):** Roshaan's P1 "social pipeline UI screenshots" ask needs real UI, and 2 of the 4 shots (branch-compare, node tags/comments) had no feature behind them. Building both properly, then capturing all 4 and pushing to `roshaan/social-pipeline`. (1) Node tags/comments — branch `jayden/node-annotations`: store actions + `NodeAnnotations` footer on canvas nodes, demo enriched. (2) Branch-compare view — next. (3) Capture hero canvas / zoomed tree / tagged node / compare, push PNGs with `[skip ci]`.
+
 - **Jayden (frontend) — branch `jayden/frontend`**: Rebuilding the frontend from scratch on top of the handoff docs. Done so far:
   - Vite + React + TS + Tailwind + shadcn/ui scaffold.
   - Milestone 2 "data core" — `src/types/chat.ts` (`ChatNode`, `ChatSessionState`) and `src/store/chatStore.ts` (Zustand persisted to `branchchat-storage`, one chat with a root system node, `selectNode` + placeholder `addNode`).

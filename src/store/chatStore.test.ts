@@ -177,3 +177,51 @@ describe("model-specific branches", () => {
     ).toBeNull();
   });
 });
+
+describe("node annotations (tags + comments)", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    store().createChat({ title: "annotations" });
+  });
+
+  const activeChat = () => store().chats[store().activeChatId];
+  const rootNode = () => activeChat().nodes[activeChat().rootId];
+
+  it("addTag appends, trims, dedupes, and journals", () => {
+    const id = rootNode().id;
+    store().addTag(id, "  research  ");
+    store().addTag(id, "research"); // duplicate — ignored
+    store().addTag(id, "   "); // empty — ignored
+
+    expect(activeChat().nodes[id].tags).toEqual(["research"]);
+    const j = activeChat().journalEntries.at(-1)!;
+    expect(j.type).toBe("tag");
+    expect(j.message).toContain("research");
+  });
+
+  it("removeTag drops the tag and clears the array when empty", () => {
+    const id = rootNode().id;
+    store().addTag(id, "a");
+    store().addTag(id, "b");
+    store().removeTag(id, "a");
+    expect(activeChat().nodes[id].tags).toEqual(["b"]);
+
+    store().removeTag(id, "b");
+    // Last tag removed → field cleared rather than left as an empty array.
+    expect(activeChat().nodes[id].tags).toBeUndefined();
+  });
+
+  it("addComment appends a comment with an id; removeComment deletes it", () => {
+    const id = rootNode().id;
+    store().addComment(id, "  first note  ");
+    store().addComment(id, ""); // empty — ignored
+
+    const comments = activeChat().nodes[id].comments!;
+    expect(comments).toHaveLength(1);
+    expect(comments[0].content).toBe("first note");
+    expect(comments[0].id).toBeTruthy();
+
+    store().removeComment(id, comments[0].id);
+    expect(activeChat().nodes[id].comments).toBeUndefined();
+  });
+});
