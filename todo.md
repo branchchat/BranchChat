@@ -12,8 +12,6 @@ This file is for Claude/human coordination after the handoff. Keep it current wh
 
 ## Active Work
 
-- **Jayden — coding-mode usage meter (2026-06-10, branch `jayden/coding-usage-meter`):** wire the new `/api/auth/usage` `coding` bucket (Roshaan's backend `0a19026`) into `UsageMeter` so the coding-mode quota is visible alongside the standard one. `coding` typed optional in `api.ts` (defensive; renders only when present).
-
 - **Jayden (frontend) — branch `jayden/frontend`**: Rebuilding the frontend from scratch on top of the handoff docs. Done so far:
   - Vite + React + TS + Tailwind + shadcn/ui scaffold.
   - Milestone 2 "data core" — `src/types/chat.ts` (`ChatNode`, `ChatSessionState`) and `src/store/chatStore.ts` (Zustand persisted to `branchchat-storage`, one chat with a root system node, `selectNode` + placeholder `addNode`).
@@ -276,6 +274,7 @@ capturing these trivial.
 
 ## Recently Completed
 
+- [x] Coding-mode usage meter: wired the additive `coding` bucket from `/api/auth/usage` (Roshaan's backend `0a19026`) into `UsageMeter` — extracted a reusable `QuotaBar` (each bar now aria-labelled for AT) and render the coding allowance as a second `Code2`-iconed bar, only when the backend exposes it (`coding` typed optional in `api.ts` so it degrades against an older backend). +2 RTL tests (34 total). Merged (#14). _Closes the 2nd of Roshaan's two open quota questions; the 1st (charge-before-provider) his backend already fixed via refund-on-5xx._
 - [x] Merged Roshaan's `roshaan/model-branches` → `jayden/frontend`: the "Branch with model" feature (branch from any message picking OpenAI/Anthropic/Gemini/local; nearest-ancestor override inheritance via `resolveModelForNode`; `ModelPicker` with backend-ranked recommendations; model badges on AI replies). Reviewed the high-risk-file diffs line-by-line (`chatStore.ts`/`api.ts`/`types/chat.ts`/`InputBar.tsx`/`ChatNode.tsx` — `requestChatReply` now returns `{reply, provider, model}`, everything else additive, v1 persist unchanged) and re-verified in a worktree (32/32 tests, build green, lint = only the 3 pre-existing errors). Merged (#13). _Pre-existing CookieConsent-overlaps-composer bug Roshaan flagged is tracked separately; not from this branch._
 - [x] Auth token routes: `/reset-password` + `/verify-email` pages (read `?token=`, POST it), forgot-password mode in `AuthDialog`, `VerifyEmailBanner` resend for unverified users, 4 `api.ts` helpers. Live-verified end-to-end with real tokens from the dev email log. Merged (#12).
 - [x] Merged `roshaan/landing` → `jayden/frontend`: marketing landing page, waitlist, **react-router**, PostHog (consent-gated) analytics, cookie consent, privacy/terms pages. The full chat shell now lives in `AppChat.tsx` under the gated `/app` route; resolved the entry-file restructure against 10 PRs of divergence. Merged (#11). _Deploy follow-ups (Pages production-branch repoint, Supabase `waitlist` table, PostHog key) tracked above — still a human/deploy decision._
