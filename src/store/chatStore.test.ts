@@ -6,6 +6,7 @@ import {
   resolveModelForNode,
   useChatStore,
 } from "@/store/chatStore";
+import { serializeChat } from "@/lib/sessionTransfer";
 
 const store = () => useChatStore.getState();
 
@@ -223,5 +224,34 @@ describe("node annotations (tags + comments)", () => {
 
     store().removeComment(id, comments[0].id);
     expect(activeChat().nodes[id].comments).toBeUndefined();
+  });
+});
+
+describe("importChat", () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  it("imports a serialized chat as a new active chat with a fresh id", () => {
+    // Build a real chat to export by loading the demo.
+    const demoId = store().loadDemoChat();
+    const exported = serializeChat(store().chats[demoId]);
+
+    const before = Object.keys(store().chats).length;
+    const newId = store().importChat(exported);
+
+    expect(Object.keys(store().chats).length).toBe(before + 1);
+    expect(newId).not.toBe(demoId); // fresh chat id, not an overwrite
+    expect(store().activeChatId).toBe(newId);
+
+    const imported = store().chats[newId];
+    expect(imported.title).toBe("Demo: Kyoto trip");
+    // activePath is recomputed from the selected node down to the root.
+    expect(imported.activePath[0]).toBe(imported.rootId);
+    expect(imported.activePath.at(-1)).toBe(imported.selectedNodeId);
+  });
+
+  it("throws a user-facing error on a malformed file", () => {
+    expect(() => store().importChat("{ broken")).toThrow(/valid JSON/);
   });
 });
