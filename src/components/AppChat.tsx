@@ -7,12 +7,13 @@
 // landing page sits outside this subtree and stays visible.
 
 import { useState } from "react"
-import { GitCompare, PanelLeft } from "lucide-react"
+import { BookOpen, GitCompare, PanelLeft } from "lucide-react"
 import { Link } from "react-router-dom"
 
 import { AuthControls } from "@/components/AuthControls"
 import { Canvas } from "@/components/Canvas"
 import { CompareView } from "@/components/CompareView"
+import { FocusView } from "@/components/FocusView"
 import { InputBar } from "@/components/InputBar"
 import { Toolbar } from "@/components/Toolbar"
 import { UsageMeter } from "@/components/UsageMeter"
@@ -23,6 +24,7 @@ import { useChatStore } from "@/store/chatStore"
 export function AppChat() {
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const openCompare = useChatStore((s) => s.openCompare)
+  const openFocusView = useChatStore((s) => s.openFocusView)
 
   return (
     <div className="ph-mask flex h-svh flex-col">
@@ -40,6 +42,15 @@ export function AppChat() {
           <h1 className="text-sm font-semibold tracking-tight">BranchChat</h1>
         </div>
         <div className="flex items-center gap-3">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="gap-1.5"
+            onClick={openFocusView}
+          >
+            <BookOpen className="size-4" />
+            Read
+          </Button>
           <Button
             variant="ghost"
             size="sm"
@@ -72,6 +83,7 @@ export function AppChat() {
         </div>
       </div>
       <CompareView />
+      <FocusView />
     </div>
   )
 }
