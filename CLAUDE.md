@@ -40,17 +40,21 @@ Frontend:
 
 - `src/store/chatStore.ts`: central application behavior. Large file; change carefully.
 - `src/components/Canvas.tsx`: React Flow graph, focus/fit behavior, replay, controls.
-- `src/components/ChatNode.tsx`: node UI and node-level actions.
+- `src/components/ChatNode.tsx`: node UI and node-level actions (incl. model badge + "Branch with model" hover action).
 - `src/components/Toolbar.tsx`: workspace browser, chat management, search.
-- `src/components/InputBar.tsx`: composer.
-- `src/types/chat.ts`: core chat/session types.
+- `src/components/InputBar.tsx`: composer (owns the ModelPicker dialog + armed model-branch chip).
+- `src/components/ModelPicker.tsx`: model selection dialog; renders backend recommendations, never hardcodes models.
+- `src/types/chat.ts`: core chat/session types (incl. `ModelChoice`, `ChatNode.modelOverride`).
 - `src/store/authStore.ts`: auth and usage state.
 
 Backend:
 
 - `app/main.py`: middleware, app setup, CORS, rate limits, startup.
-- `app/routers/chat.py`: AI routes and summarization.
-- `app/services/gemini_service.py`: Gemini prompt/provider logic.
+- `app/routers/chat.py`: generic `POST /api/chat/{provider}` AI route.
+- `app/routers/models.py`: model registry + recommendation endpoints.
+- `app/services/chat_service.py`: unified generation entrypoint (prompt assembly, model validation, error mapping).
+- `app/services/providers/`: provider abstraction (gemini/openai/anthropic/ollama; vendor wire formats live ONLY here).
+- `app/services/model_catalog.py` + `app/services/model_recommender.py`: model metadata registry and task-based recommendation scoring.
 - `app/services/usage_service.py`: daily quota logic.
 - `app/routers/auth.py` and `app/services/auth_service.py`: login, cookies, email auth, failed login limiter.
 - `app/routers/share.py` and `app/services/share_service.py`: shared branch snapshots.
@@ -62,6 +66,7 @@ Backend:
 - `parentId`/`childrenIds` define the conversation tree.
 - `contextNodeIds` are supplemental cross-branch links, not tree edges.
 - `activePath` must match the selected node path to root.
+- A branch's AI model = nearest ancestor `modelOverride` on the path to root (`resolveModelForNode`); assistant nodes record the `provider`/`model` that actually answered.
 - Search result navigation uses `openNode(chatId, nodeId)` and a `focusNodeRequest` consumed by `Canvas.tsx`.
 - Branch placement uses exported `__testNextChildPosition` for layout tests.
 - Route-level auth limits still exist; the broad duplicate `/api/auth/*` middleware bucket was intentionally removed.

@@ -95,12 +95,24 @@ Tree invariants:
 
 For the current shipping UI:
 
-1. User sends a message or branches from a node.
+1. User sends a message or branches from a node. Branching can carry a model
+   choice ("Branch with model" / `ModelPicker.tsx`); the choice is stamped as
+   `modelOverride` on the branch's first user node.
 2. `chatStore.ts` immediately creates a user node and loading assistant node.
 3. It builds `history` from the selected path and `linked_context` from context-linked branches.
-4. It posts to `/api/chat/gemini` or `/api/chat/ollama` depending on `VITE_PROVIDER`.
-5. Backend enforces rate limits and usage limits, assembles the model prompt, calls provider, sanitizes the reply, and returns text.
-6. `chatStore.ts` fills the loading assistant node and updates selection/path.
+4. It resolves the branch's model via `resolveModelForNode` (nearest ancestor
+   `modelOverride` wins; none = default) and posts to `/api/chat/{provider}`
+   — `VITE_PROVIDER` (gemini/ollama) when no override — with an optional
+   `model` field.
+5. Backend validates provider+model against its catalog, enforces rate and
+   usage limits, assembles the model prompt, calls the provider, sanitizes
+   the reply, and returns text plus the provider/model that answered.
+6. `chatStore.ts` fills the loading assistant node (stamping `provider`/
+   `model` for the node badge) and updates selection/path.
+
+Model metadata and "Recommended for this task" entries come from
+`GET /api/models` and `POST /api/models/recommend`; the picker renders what
+the backend returns and never hardcodes model lists.
 
 Important: `node_id` in stateless chat routes is mostly an echo/correlation id. The backend should not assume it can load the UI tree from Postgres for normal chat.
 
@@ -119,7 +131,8 @@ Middleware responsibilities:
 
 Key routers:
 
-- `app/routers/chat.py`: stateless Gemini/Ollama chat endpoints, summarization, legacy chat routes.
+- `app/routers/chat.py`: stateless `POST /api/chat/{provider}` chat endpoint, generic over the provider registry (gemini/openai/anthropic/ollama).
+- `app/routers/models.py`: `GET /api/models` (available models + metadata) and `POST /api/models/recommend` (task-based ranking).
 - `app/routers/auth.py`: signup, login, logout, `/me`, usage status, verification, password reset.
 - `app/routers/share.py`: authenticated branch snapshot creation and public share reads.
 - `app/routers/analytics.py`: analytics dashboard endpoints.
@@ -127,8 +140,10 @@ Key routers:
 
 Key services:
 
-- `app/services/gemini_service.py`: Gemini HTTP calls, fallback model behavior, prompt assembly, linked context formatting.
-- `app/services/ollama_service.py`: local model path.
+- `app/services/chat_service.py`: unified generation entrypoint (prompt assembly, catalog model validation, error mapping).
+- `app/services/providers/`: provider abstraction — `AIProvider` base plus gemini (fallback behavior preserved), openai, anthropic, and ollama implementations; vendor wire formats live only here.
+- `app/services/model_catalog.py`: model metadata registry (labels, context windows, badges, task scores).
+- `app/services/model_recommender.py`: rule-based task-to-model recommendation scoring.
 - `app/services/usage_service.py`: anonymous/authenticated daily quotas and network abuse buckets.
 - `app/services/auth_service.py`: password hashing, JWT cookies, anonymous cookies, email token helpers, failed login limiter.
 - `app/services/share_service.py`: share snapshot persistence.
@@ -157,8 +172,8 @@ Recommended split from the README:
 
 Critical production env:
 
-- Backend: `DATABASE_URL`, `GEMINI_API_KEY`, `GEMINI_MODEL`, `GEMINI_FALLBACK_MODEL`, `JWT_SECRET_KEY`, `ANON_IDENTITY_SALT`, `COOKIE_SECURE=true`, `COOKIE_SAMESITE=none`, `CORS_ORIGINS`, `ALLOWED_HOSTS`, `ENABLE_LEGACY_TREE_API=false`.
-- Frontend: `VITE_API_BASE`, `VITE_PROVIDER`.
+- Backend: `DATABASE_URL`, `GEMINI_API_KEY`, `GEMINI_MODEL`, `GEMINI_FALLBACK_MODEL`, optional `OPENAI_API_KEY`/`OPENAI_MODEL` and `ANTHROPIC_API_KEY`/`ANTHROPIC_MODEL` (a provider without a key is simply absent from `/api/models`), `OLLAMA_ENABLED`, `JWT_SECRET_KEY`, `ANON_IDENTITY_SALT`, `COOKIE_SECURE=true`, `COOKIE_SAMESITE=none`, `CORS_ORIGINS`, `ALLOWED_HOSTS`, `ENABLE_LEGACY_TREE_API=false`.
+- Frontend: `VITE_API_BASE`, `VITE_PROVIDER` (default provider; per-branch model picks override per request).
 
 ## Recent Context For The Handoff
 

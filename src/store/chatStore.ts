@@ -23,6 +23,7 @@ import type {
   ChatNode,
   ChatSessionState,
   JournalEntry,
+  ModelChoice,
   Workspace,
 } from "@/types/chat";
 
@@ -106,6 +107,27 @@ function computeActivePath(
     current = nodes[current].parentId;
   }
   return path.reverse();
+}
+
+// The AI model a node answers with: the nearest ancestor (or own) override
+// on the path back to root, or null for the app default. This is what makes
+// model-specific branches inherit correctly — a branch started with model X
+// keeps using X for every continuation, while sibling branches (which are
+// not on this parent chain) are untouched. Deeper overrides win, so a GPT
+// branch nested inside a Gemini branch answers with GPT.
+export function resolveModelForNode(
+  nodes: Record<string, ChatNode>,
+  nodeId: string | null,
+): ModelChoice | null {
+  let current = nodeId;
+  const guard = new Set<string>();
+  while (current && nodes[current] && !guard.has(current)) {
+    guard.add(current);
+    const override = nodes[current].modelOverride;
+    if (override) return override;
+    current = nodes[current].parentId;
+  }
+  return null;
 }
 
 // Messages on the path from root to `leafId`, oldest first, trimmed to caps.
@@ -199,7 +221,7 @@ function buildExchange(
   chat: ChatSessionState,
   parentId: string,
   message: string,
-  branchMeta: Pick<ChatNode, "branchLabel" | "focusText">,
+  branchMeta: Pick<ChatNode, "branchLabel" | "focusText" | "modelOverride">,
   codingMode: boolean,
 ): { chat: ChatSessionState; userId: string; assistantId: string } | null {
   const parent = chat.nodes[parentId];
@@ -280,6 +302,13 @@ export interface ChatStoreState {
   // from search results); Canvas consumes it then calls clearFocusRequest.
   focusNodeRequest: FocusNodeRequest | null;
 
+  // Node id a "Branch with model" action was invoked on (from a node's hover
+  // action or the composer). The composer renders the ModelPicker dialog for
+  // it. Transient — not persisted (see partialize).
+  modelPickerFor: string | null;
+  openModelPicker: (parentId: string) => void;
+  closeModelPicker: () => void;
+
   // --- chat (workspace tab) management, driven by the Toolbar ---
   // Create a new empty chat and switch to it; returns the new chat id.
   createChat: (opts?: { title?: string; workspace?: Workspace }) => string;
@@ -312,10 +341,12 @@ export interface ChatStoreState {
 
   // Branch: append a user message under `parentId` as an alternate timeline,
   // with a branch label (and optional focus excerpt), then request a reply.
+  // `model` makes it a model-specific branch: the choice is stamped on the
+  // branch's first user node and inherited by all continuations under it.
   branchFromNode: (
     parentId: string,
     message: string,
-    opts?: { branchLabel?: string; focusText?: string },
+    opts?: { branchLabel?: string; focusText?: string; model?: ModelChoice },
   ) => ExchangeResult | null;
 
   // Re-request the reply for an existing (e.g. errored) assistant node.
@@ -332,11 +363,14 @@ export const useChatStore = create<ChatStoreState>()(
   persist(
     (set, get) => {
       // Write the final reply (or an error message) into the assistant node.
+      // `generatedBy` records which provider/model actually answered (from
+      // the backend response) so the node UI can show it.
       const fillAssistant = (
         chatId: string,
         assistantId: string,
         content: string,
         isError: boolean,
+        generatedBy?: { provider?: string; model?: string },
       ) =>
         set((state) => {
           const chat = state.chats[chatId];
@@ -354,6 +388,8 @@ export const useChatStore = create<ChatStoreState>()(
                     content,
                     isLoading: false,
                     isError: isError || undefined,
+                    provider: generatedBy?.provider ?? node.provider,
+                    model: generatedBy?.model ?? node.model,
                   },
                 },
                 updatedAt: Date.now(),
@@ -384,24 +420,44 @@ export const useChatStore = create<ChatStoreState>()(
           userNode.parentId,
           codingMode,
         );
+        // Inherited model for this branch: the nearest override on the path
+        // up from the user node (covers both "this branch was created with
+        // model X" and "continuing inside such a branch"). Null = the
+        // env-configured default provider, exactly the pre-feature behaviour.
+        const branchModel = resolveModelForNode(chat.nodes, userId);
 
         try {
           let reply: string;
+          let generatedBy: { provider?: string; model?: string } | undefined;
           if (isBackendConfigured()) {
-            reply = await requestChatReply({
-              node_id: assistantId,
-              message,
-              history,
-              linked_context: [],
-              coding_mode: codingMode,
-            });
+            const result = await requestChatReply(
+              {
+                node_id: assistantId,
+                message,
+                history,
+                linked_context: [],
+                coding_mode: codingMode,
+                model: branchModel?.model,
+              },
+              { provider: branchModel?.provider },
+            );
+            reply = result.reply;
+            generatedBy = { provider: result.provider, model: result.model };
           } else {
             await new Promise((resolve) =>
               setTimeout(resolve, STUB_REPLY_DELAY_MS),
             );
             reply = stubAssistantReply(message, history);
+            // Keep the branch's selection visible on nodes even in stub mode.
+            generatedBy = branchModel ?? undefined;
           }
-          fillAssistant(chatId, assistantId, reply || "(empty reply)", false);
+          fillAssistant(
+            chatId,
+            assistantId,
+            reply || "(empty reply)",
+            false,
+            generatedBy,
+          );
         } catch (err) {
           const detail =
             err instanceof ChatApiError
@@ -422,6 +478,16 @@ export const useChatStore = create<ChatStoreState>()(
         activeChatId: initialChat.id,
         codingMode: false,
         focusNodeRequest: null,
+        modelPickerFor: null,
+
+        openModelPicker: (parentId) =>
+          set((state) => {
+            const chat = state.chats[state.activeChatId];
+            if (!chat || !chat.nodes[parentId]) return {};
+            return { modelPickerFor: parentId };
+          }),
+
+        closeModelPicker: () => set({ modelPickerFor: null }),
 
         createChat: (opts) => {
           const chat = createInitialChat(
@@ -575,17 +641,24 @@ export const useChatStore = create<ChatStoreState>()(
               chat,
               parentId,
               text,
-              { branchLabel, focusText: opts?.focusText },
+              {
+                branchLabel,
+                focusText: opts?.focusText,
+                modelOverride: opts?.model,
+              },
               state.codingMode,
             );
             if (!built) return {};
 
+            const modelNote = opts?.model
+              ? ` using ${opts.model.label ?? opts.model.model}`
+              : "";
             const journalEntries: JournalEntry[] = [
               ...built.chat.journalEntries,
               {
                 id: createJournalId(),
                 type: "branch",
-                message: `Branched from "${parent.content.slice(0, 40)}" as ${branchLabel}`,
+                message: `Branched from "${parent.content.slice(0, 40)}" as ${branchLabel}${modelNote}`,
                 nodeId: built.userId,
                 createdAt: Date.now(),
               },

@@ -1,17 +1,18 @@
 // Per-node UI on the canvas. A custom React Flow node that renders one
 // ChatNode from the store as a shadcn Card with a role badge and its content.
 //
-// Renders + selection highlight, plus a retry action on errored assistant
-// nodes. Other node-level actions (continue, branch, tag, context handles)
-// land in later milestones.
+// Renders + selection highlight, a retry action on errored assistant nodes,
+// a model badge on AI replies (which model generated this response), and a
+// hover "Branch with model" action that opens the ModelPicker for this node.
 
 import { memo } from "react";
 import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
-import { RotateCcw } from "lucide-react";
+import { Bot, RotateCcw } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { modelLabel } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { NODE_WIDTH } from "@/lib/treeLayout";
 import { useChatStore } from "@/store/chatStore";
@@ -41,9 +42,19 @@ function ChatNodeComponent({ data, selected }: NodeProps<ChatFlowNode>) {
   const { node, flashKey } = data;
   const isRoot = node.parentId === null;
   const retryAssistant = useChatStore((s) => s.retryAssistant);
+  const selectNode = useChatStore((s) => s.selectNode);
+  const openModelPicker = useChatStore((s) => s.openModelPicker);
+
+  // Which model generated this reply (assistant nodes, stamped from the
+  // backend response). Label resolves via the cached catalog, raw id before
+  // the catalog loads.
+  const generatedBy =
+    node.role === "assistant" && !node.isLoading
+      ? modelLabel(node.provider, node.model)
+      : null;
 
   return (
-    <div className="relative" style={{ width: NODE_WIDTH }}>
+    <div className="group/node relative" style={{ width: NODE_WIDTH }}>
       {/* Pulse overlay for a node just opened from search. Keyed by flashKey so
           re-opening replays the animation; pointer-events-none keeps it inert. */}
       {flashKey != null && (
@@ -73,6 +84,11 @@ function ChatNodeComponent({ data, selected }: NodeProps<ChatFlowNode>) {
             </Badge>
             {node.branchLabel && (
               <span className="text-muted-foreground">{node.branchLabel}</span>
+            )}
+            {generatedBy && (
+              <Badge variant="outline" className="ml-auto font-normal">
+                {generatedBy}
+              </Badge>
             )}
           </CardTitle>
         </CardHeader>
@@ -115,6 +131,27 @@ function ChatNodeComponent({ data, selected }: NodeProps<ChatFlowNode>) {
         {/* Outgoing edge to children. */}
         <Handle type="source" position={Position.Bottom} className="!bg-border" />
       </Card>
+
+      {/* Hover action: branch from THIS node with a chosen model. Selects the
+          node first so the composer targets it; the picker (rendered by
+          InputBar) opens via the store. Hidden while the reply is loading;
+          `nodrag` keeps React Flow from treating the click as a drag. */}
+      {!node.isLoading && (
+        <Button
+          variant="outline"
+          size="sm"
+          className="nodrag absolute -top-2.5 -right-2.5 h-6 gap-1 px-1.5 text-[10px] opacity-0 shadow-sm transition-opacity group-hover/node:opacity-100 focus-visible:opacity-100"
+          aria-label="Branch from this message with a model"
+          onClick={(e) => {
+            e.stopPropagation();
+            selectNode(node.id);
+            openModelPicker(node.id);
+          }}
+        >
+          <Bot className="size-3" />
+          Branch with model
+        </Button>
+      )}
     </div>
   );
 }

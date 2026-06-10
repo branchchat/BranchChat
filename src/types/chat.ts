@@ -30,6 +30,19 @@ export interface JournalEntry {
   createdAt: number;
 }
 
+// A branch's AI model selection. Lives on the node that STARTS the branch
+// (its first user node) and applies to every descendant until a deeper
+// override appears — resolution is "nearest ancestor override wins" (see
+// resolveModelForNode in chatStore), so nested branches can each pick their
+// own model while siblings stay unaffected.
+export interface ModelChoice {
+  provider: string;
+  model: string;
+  // Display label captured at selection time (from the backend catalog), so
+  // chips/journal copy render without an extra lookup.
+  label?: string;
+}
+
 // One message node in the conversation tree.
 //
 // Invariants (see architecture.md "Tree invariants"):
@@ -50,6 +63,13 @@ export interface ChatNode {
   branchColor?: string;
   branchSummary?: string;
   focusText?: string;
+
+  // Model-specific branches: the override this node introduces (if any)…
+  modelOverride?: ModelChoice;
+  // …and, on assistant nodes, what actually generated this reply (reported
+  // by the backend — can differ from the request when a provider falls back).
+  provider?: string;
+  model?: string;
 
   // Local organization metadata.
   tags?: string[];
