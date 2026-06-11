@@ -185,10 +185,12 @@ def _static_catalog() -> tuple[ModelInfo, ...]:
             },
         ),
         # ----- Anthropic ---------------------------------------------------
+        # Fable 5 is deliberately absent: at $10/$50 per MTok it's too
+        # expensive to expose. Opus 4.8 is the premium Anthropic option.
         ModelInfo(
             provider="anthropic",
-            id="claude-fable-5",
-            label="Claude Fable 5",
+            id="claude-opus-4-8",
+            label="Claude Opus 4.8",
             description="Top-tier reasoning, research synthesis, and writing.",
             strengths=(
                 "deep multi-step reasoning",
@@ -197,7 +199,7 @@ def _static_catalog() -> tuple[ModelInfo, ...]:
                 "coding",
             ),
             weaknesses=("higher cost",),
-            context_window=200_000,
+            context_window=1_000_000,
             multimodal=True,
             speed="medium",
             cost_tier="high",
@@ -330,6 +332,17 @@ def get_model(provider: str, model_id: str) -> ModelInfo | None:
 
 def default_model_for(provider: str) -> str | None:
     return _DEFAULT_MODEL_BY_PROVIDER.get(provider)
+
+
+def is_premium(provider: str, model_id: str) -> bool:
+    """Whether a message to this model draws from the premium daily bucket.
+
+    Keyed off the catalog's cost tier so new expensive models are covered by
+    adding them with ``cost_tier="high"`` — no separate list to maintain.
+    Unknown ids (e.g. a custom ``OLLAMA_MODEL`` default) are not premium.
+    """
+    model = get_model(provider, model_id)
+    return model is not None and model.cost_tier == "high"
 
 
 def resolve_model(provider: str, requested: str | None) -> str:

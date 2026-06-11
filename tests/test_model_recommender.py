@@ -46,17 +46,17 @@ def test_recommend_empty_model_list_is_empty_not_an_error():
 
 
 def test_recommend_prefers_high_affinity_for_dominant_task():
-    models = _models("gemini-2.5-flash", "claude-fable-5")
+    models = _models("gemini-2.5-flash", "claude-opus-4-8")
     recs = recommend_models(
         latest_user_message="prove this theorem step by step",
         available_models=models,
     )
-    assert recs[0].model.id == "claude-fable-5"  # math affinity .90 vs .65
+    assert recs[0].model.id == "claude-opus-4-8"  # math affinity .90 vs .65
     assert recs[0].score > recs[1].score
 
 
 def test_recommend_huge_context_penalises_small_windows():
-    models = _models("gemini-2.5-pro", "claude-fable-5")
+    models = _models("gemini-2.5-pro", "claude-haiku-4-5-20251001")
     # ~500k tokens of inherited context: over half of a 200k window (penalty),
     # exactly half of a 1M window (no penalty).
     recs = recommend_models(
@@ -65,7 +65,7 @@ def test_recommend_huge_context_penalises_small_windows():
         context_chars=2_000_000,
     )
     assert recs[0].model.id == "gemini-2.5-pro"
-    penalised = next(r for r in recs if r.model.id == "claude-fable-5")
+    penalised = next(r for r in recs if r.model.id == "claude-haiku-4-5-20251001")
     assert "context window" in penalised.reason
 
 

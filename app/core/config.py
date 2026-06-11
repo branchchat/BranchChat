@@ -142,6 +142,10 @@ class Settings(BaseSettings):
     FREE_DAILY_MESSAGE_LIMIT: int = 10
     AUTHENTICATED_DAILY_MESSAGE_LIMIT: int = 50
     AUTHENTICATED_CODE_DAILY_MESSAGE_LIMIT: int = 10
+    # Messages to models the catalog marks cost_tier="high" draw from their
+    # own, smaller bucket. 0 disables premium models for that audience.
+    AUTHENTICATED_PREMIUM_DAILY_MESSAGE_LIMIT: int = 10
+    FREE_PREMIUM_DAILY_MESSAGE_LIMIT: int = 0
     ANONYMOUS_NETWORK_BUCKET_MULTIPLIER: int = 5
 
     # -- Rate limits (requests per minute, per identity/IP bucket) ----------

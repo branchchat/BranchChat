@@ -69,3 +69,4 @@ class UsageStatus(BaseModel):
     limit: int
     remaining: int
     coding: UsageBucket
+    premium: UsageBucket

@@ -145,6 +145,9 @@ async def usage(
         coding_used, coding_limit = await usage_service.get_coding_status(
             session, user_id=ctx.user_id, anon_id=ctx.anon_id
         )
+        premium_used, premium_limit = await usage_service.get_premium_status(
+            session, user_id=ctx.user_id, anon_id=ctx.anon_id
+        )
     return UsageStatus(
         authenticated=ctx.user_id is not None,
         kind="standard",
@@ -155,6 +158,11 @@ async def usage(
             used=coding_used,
             limit=coding_limit,
             remaining=max(0, coding_limit - coding_used),
+        ),
+        premium=UsageBucket(
+            used=premium_used,
+            limit=premium_limit,
+            remaining=max(0, premium_limit - premium_used),
         ),
     )
 

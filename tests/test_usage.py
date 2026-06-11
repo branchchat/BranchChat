@@ -45,14 +45,14 @@ async def test_anon_quota_increments_then_blocks_429():
         for _ in range(settings.FREE_DAILY_MESSAGE_LIMIT):
             async with rls_tx(session, None):
                 await usage_service.enforce_message_quota(
-                    session, user_id=None, anon_id=anon, client_ip=ip, coding_mode=False
+                    session, user_id=None, anon_id=anon, client_ip=ip, kind="standard"
                 )
 
         # The next one is rejected with 429 — and must NOT have incremented.
         with pytest.raises(HTTPException) as exc:
             async with rls_tx(session, None):
                 await usage_service.enforce_message_quota(
-                    session, user_id=None, anon_id=anon, client_ip=ip, coding_mode=False
+                    session, user_id=None, anon_id=anon, client_ip=ip, kind="standard"
                 )
         assert exc.value.status_code == 429
 

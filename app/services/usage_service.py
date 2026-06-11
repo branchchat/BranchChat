@@ -53,44 +53,61 @@ async def _consume(
     return result.scalar_one_or_none() is not None
 
 
+def _auth_limit(kind: str) -> int:
+    if kind == "coding":
+        return settings.AUTHENTICATED_CODE_DAILY_MESSAGE_LIMIT
+    if kind == "premium":
+        return settings.AUTHENTICATED_PREMIUM_DAILY_MESSAGE_LIMIT
+    return settings.AUTHENTICATED_DAILY_MESSAGE_LIMIT
+
+
+def _anon_limit(kind: str) -> int:
+    if kind == "premium":
+        return settings.FREE_PREMIUM_DAILY_MESSAGE_LIMIT
+    return settings.FREE_DAILY_MESSAGE_LIMIT
+
+
 async def enforce_message_quota(
     session: AsyncSession,
     *,
     user_id: str | None,
     anon_id: str,
     client_ip: str,
-    coding_mode: bool,
+    kind: str,
 ) -> None:
     """Charge one AI message against the right bucket(s); raise 429 if exhausted.
 
-    Runs inside the caller's transaction so the increment and the request are
+    ``kind`` is "standard", "coding", or "premium" (high-cost models). Runs
+    inside the caller's transaction so the increment and the request are
     atomic together.
     """
-    kind = "coding" if coding_mode else "standard"
-
     if user_id is not None:
-        limit = (
-            settings.AUTHENTICATED_CODE_DAILY_MESSAGE_LIMIT
-            if coding_mode
-            else settings.AUTHENTICATED_DAILY_MESSAGE_LIMIT
-        )
+        limit = _auth_limit(kind)
         if not await _consume(session, identity_svc.user_identity(user_id), kind, limit):
-            detail = (
-                f"You've reached today's coding-mode limit of {limit} messages."
-                if coding_mode
-                else f"You've reached today's limit of {limit} messages. It resets tomorrow."
-            )
+            if kind == "coding":
+                detail = f"You've reached today's coding-mode limit of {limit} messages."
+            elif kind == "premium":
+                detail = (
+                    f"You've reached today's premium-model limit of {limit} messages. "
+                    "Other models are still available."
+                )
+            else:
+                detail = f"You've reached today's limit of {limit} messages. It resets tomorrow."
             raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, detail=detail)
         return
 
     # Anonymous: own bucket first (the limit users actually hit), then the
     # coarser network bucket. Same generic message for both — don't leak the
     # network mechanism.
+    free = _anon_limit(kind)
     anon_msg = (
-        f"You've reached the free daily limit of {settings.FREE_DAILY_MESSAGE_LIMIT} "
-        "messages. Sign in to get more."
+        "Premium models require an account. Sign in to use them."
+        if kind == "premium" and free <= 0
+        else (
+            f"You've reached the free daily limit of {free} messages. "
+            "Sign in to get more."
+        )
     )
-    free = settings.FREE_DAILY_MESSAGE_LIMIT
     if not await _consume(session, identity_svc.anon_identity(anon_id), kind, free):
         raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, detail=anon_msg)
 
@@ -143,6 +160,26 @@ async def get_coding_status(
     return used, limit
 
 
+async def get_premium_status(
+    session: AsyncSession, *, user_id: str | None, anon_id: str
+) -> tuple[int, int]:
+    """Return ``(used, limit)`` for the caller's premium-model daily bucket today."""
+    if user_id is not None:
+        identity_hash = identity_svc.user_identity(user_id)
+    else:
+        identity_hash = identity_svc.anon_identity(anon_id)
+    limit = _auth_limit("premium") if user_id is not None else _anon_limit("premium")
+    result = await session.execute(
+        select(UsageCounter.count).where(
+            UsageCounter.identity_hash == identity_hash,
+            UsageCounter.day == _today(),
+            UsageCounter.kind == "premium",
+        )
+    )
+    used = result.scalar_one_or_none() or 0
+    return used, limit
+
+
 _REFUND = text(
     """
     UPDATE usage_counters
@@ -164,7 +201,7 @@ async def refund_message_quota(
     user_id: str | None,
     anon_id: str,
     client_ip: str,
-    coding_mode: bool,
+    kind: str,
 ) -> None:
     """Give back one message previously charged by ``enforce_message_quota``.
 
@@ -173,14 +210,10 @@ async def refund_message_quota(
     user bucket for authenticated callers, or both the anon and network buckets
     for anonymous callers. Never drops a counter below zero.
     """
-    kind = "coding" if coding_mode else "standard"
     if user_id is not None:
         await _release(session, identity_svc.user_identity(user_id), kind)
         return
     await _release(session, identity_svc.anon_identity(anon_id), kind)
-    net_limit = (
-        settings.FREE_DAILY_MESSAGE_LIMIT
-        * settings.ANONYMOUS_NETWORK_BUCKET_MULTIPLIER
-    )
+    net_limit = _anon_limit(kind) * settings.ANONYMOUS_NETWORK_BUCKET_MULTIPLIER
     if net_limit > 0:
         await _release(session, identity_svc.network_identity(client_ip), kind)

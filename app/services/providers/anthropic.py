@@ -53,6 +53,12 @@ class AnthropicProvider(AIProvider):
             "system": req.system_instruction,
             "messages": messages,
             "max_tokens": req.max_output_tokens,
+            # Auto-places a cache breakpoint on the last prompt block. Each
+            # turn then reads the entry the previous turn wrote, so only the
+            # new tail is billed at full input price (reads are ~0.1x).
+            # Prompts below the model's minimum (2-4K tokens) silently skip
+            # caching, which is fine.
+            "cache_control": {"type": "ephemeral"},
         }
 
         try:
@@ -82,6 +88,14 @@ class AnthropicProvider(AIProvider):
             raise ProviderRejectedError()
 
         data = resp.json()
+        usage = data.get("usage") or {}
+        logger.info(
+            "Anthropic usage: input=%s cache_write=%s cache_read=%s output=%s",
+            usage.get("input_tokens"),
+            usage.get("cache_creation_input_tokens"),
+            usage.get("cache_read_input_tokens"),
+            usage.get("output_tokens"),
+        )
         blocks = data.get("content") or []
         text = "".join(
             b.get("text", "") for b in blocks if b.get("type") == "text"

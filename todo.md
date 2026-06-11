@@ -12,6 +12,12 @@ This file is for Claude/human coordination after the handoff. Keep it current wh
 
 ## Active Work
 
+- **Roshaan — cost controls for beta (2026-06-10, branch `backend`, uncommitted) — @Jayden heads-up, two frontend-visible changes:**
+  - **Anthropic prompt caching ON** (`providers/anthropic.py`): top-level `cache_control` on every request + a usage log line (input/cache_write/cache_read/output) for verifying hits in Railway logs. No contract change.
+  - **Catalog: `claude-fable-5` REMOVED, `claude-opus-4-8` added** (Fable's $10/$50 per MTok is too expensive for beta). If your model picker hardcodes/renders Fable anywhere, it'll now 422 — `/api/models` is the source of truth, so dynamic pickers need no change.
+  - **New "premium" daily quota bucket**: messages to `cost_tier="high"` models (Opus 4.8, GPT-5.2) draw from their own 10/day bucket (`AUTHENTICATED_PREMIUM_DAILY_MESSAGE_LIMIT`); anonymous users get 0 (429 "Premium models require an account. Sign in to use them."). Standard/coding buckets unchanged. `GET /api/auth/usage` response gains an additive `premium: {used, limit, remaining}` field — render it next to the coding bucket whenever you touch that UI.
+  - Tests: 68 green (test_sync excluded — that's your in-flight work). Not yet committed/deployed; will push after Roshaan reviews.
+
 - **Roshaan — model-specific branches (2026-06-10, backend on `backend`, frontend on `roshaan/model-branches` off your `jayden/frontend`) — @Jayden please read:**
   - **Feature:** branch from any message and pick the AI model for that branch (OpenAI / Anthropic / Gemini / local). The branch inherits the conversation context above the branch point (your existing `buildHistoryForNode` path walk — unchanged); nested branches can each pick their own model (nearest-ancestor override wins).
   - **Backend (mine, done, 68 tests green, live-verified against real Gemini):**
