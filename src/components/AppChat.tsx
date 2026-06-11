@@ -6,7 +6,7 @@
 // in PostHog session replay (see session_recording config in main.tsx); the
 // landing page sits outside this subtree and stays visible.
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { BookOpen, GitCompare, PanelLeft } from "lucide-react"
 import { Link } from "react-router-dom"
 
@@ -20,12 +20,17 @@ import { Toolbar } from "@/components/Toolbar"
 import { UsageMeter } from "@/components/UsageMeter"
 import { VerifyEmailBanner } from "@/components/VerifyEmailBanner"
 import { Button } from "@/components/ui/button"
+import { startSyncLoop } from "@/lib/sync"
 import { useChatStore } from "@/store/chatStore"
 
 export function AppChat() {
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const openCompare = useChatStore((s) => s.openCompare)
   const openFocusView = useChatStore((s) => s.openFocusView)
+
+  // Background server-side sync for signed-in users (no-op unless enabled
+  // via the Toolbar toggle; idempotent across remounts).
+  useEffect(() => startSyncLoop(), [])
 
   return (
     <div className="ph-mask flex h-svh flex-col">

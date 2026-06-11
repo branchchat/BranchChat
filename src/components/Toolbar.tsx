@@ -39,6 +39,7 @@ import {
   storageUsageChars,
   STORAGE_WARN_CHARS,
 } from "@/lib/sessionTransfer";
+import { SyncToggle } from "@/components/SyncToggle";
 import { useChatStore } from "@/store/chatStore";
 import type { ChatSessionState, Workspace } from "@/types/chat";
 
@@ -306,6 +307,7 @@ export function Toolbar({ onNavigate }: { onNavigate?: () => void } = {}) {
       </nav>
 
       <div className="space-y-1 border-t p-2">
+        <SyncToggle />
         <Button
           variant="ghost"
           size="sm"

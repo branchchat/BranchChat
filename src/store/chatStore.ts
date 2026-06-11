@@ -383,6 +383,16 @@ export interface ChatStoreState {
   // malformed file.
   importChat: (text: string) => string;
 
+  // Upsert a chat pulled from server-side sync (see lib/sync.ts), KEEPING its
+  // chat id so the same conversation maps to one row across devices. Skips
+  // (returns false) when the local copy is same-or-newer — last-write-wins.
+  // Unlike importChat it does not switch the active chat.
+  applySyncedChat: (
+    chatId: string,
+    payload: Record<string, unknown>,
+    remoteUpdatedAt: number,
+  ) => boolean;
+
   // Low-level helper retained from Milestone 2 (used by tests/console).
   addNode: (
     parentId: string,
@@ -852,6 +862,29 @@ export const useChatStore = create<ChatStoreState>()(
             activeChatId: id,
           }));
           return id;
+        },
+
+        applySyncedChat: (chatId, payload, remoteUpdatedAt) => {
+          const local = get().chats[chatId];
+          if (local && local.updatedAt >= remoteUpdatedAt) return false;
+          // Reuse the import path's validation/normalization (drops transient
+          // and layout fields, prunes dangling refs); a malformed server blob
+          // throws the same user-facing Error.
+          const sanitized = parseSession(JSON.stringify(payload));
+          const chat: ChatSessionState = {
+            ...sanitized,
+            id: chatId,
+            // Keep the remote version stamp: sanitize sets updatedAt to "now",
+            // which would make every pull look newer than the server and
+            // immediately push back what we just pulled.
+            updatedAt: remoteUpdatedAt,
+            activePath: computeActivePath(
+              sanitized.nodes,
+              sanitized.selectedNodeId,
+            ),
+          };
+          set((state) => ({ chats: { ...state.chats, [chatId]: chat } }));
+          return true;
         },
 
         addNode: (parentId, init) => {

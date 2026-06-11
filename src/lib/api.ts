@@ -390,3 +390,89 @@ export async function resendVerification(): Promise<string> {
   );
   return res.detail ?? "Verification email sent.";
 }
+
+// --- server-side sync (optional, signed-in users) ---------------------------
+// The app stays local-first; /api/sync is a per-chat backup/sync target.
+// Payloads are the same versioned envelope as session export/import; conflict
+// resolution is last-write-wins on the chat's updatedAt (see lib/sync.ts).
+
+export interface SyncManifestEntry {
+  chat_id: string;
+  title: string | null;
+  updated_at: number;
+}
+
+export interface SyncedChatPayload {
+  chat_id: string;
+  title: string | null;
+  updated_at: number;
+  payload: Record<string, unknown>;
+}
+
+// JSON request with cookie credentials; non-2xx throws ChatApiError with the
+// backend's `detail` (same contract as postAuth, but method-generic).
+async function syncFetch<T>(
+  path: string,
+  init?: { method?: string; body?: object },
+): Promise<T> {
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}${path}`, {
+      method: init?.method ?? "GET",
+      headers: init?.body ? { "Content-Type": "application/json" } : undefined,
+      credentials: "include",
+      body: init?.body ? JSON.stringify(init.body) : undefined,
+    });
+  } catch {
+    throw new ChatApiError("Could not reach the backend.", 0);
+  }
+  if (res.status === 204) return undefined as T;
+  let data: unknown = null;
+  try {
+    data = await res.json();
+  } catch {
+    // Non-JSON body; handled below.
+  }
+  if (!res.ok) {
+    const detail = (data as { detail?: unknown } | null)?.detail;
+    throw new ChatApiError(
+      typeof detail === "string" && detail
+        ? detail
+        : `Request failed (HTTP ${res.status}).`,
+      res.status,
+    );
+  }
+  return data as T;
+}
+
+// GET /api/sync/chats → ids + versions of everything synced for this user.
+export async function fetchSyncManifest(): Promise<SyncManifestEntry[]> {
+  const res = await syncFetch<{ chats: SyncManifestEntry[] }>("/api/sync/chats");
+  return res.chats;
+}
+
+// GET /api/sync/chats/{id} → one synced chat (the full payload envelope).
+export function fetchSyncedChat(chatId: string): Promise<SyncedChatPayload> {
+  return syncFetch(`/api/sync/chats/${encodeURIComponent(chatId)}`);
+}
+
+// PUT /api/sync/chats/{id} → "stored", or "stale" when the server copy is
+// newer (the caller should pull instead).
+export function pushSyncedChat(
+  chatId: string,
+  payload: Record<string, unknown>,
+  updatedAt: number,
+  title?: string,
+): Promise<{ status: "stored" | "stale"; updated_at: number }> {
+  return syncFetch(`/api/sync/chats/${encodeURIComponent(chatId)}`, {
+    method: "PUT",
+    body: { payload, updated_at: updatedAt, title: title ?? null },
+  });
+}
+
+// DELETE /api/sync/chats/{id} → remove the server copy (local copy untouched).
+export function deleteSyncedChat(chatId: string): Promise<void> {
+  return syncFetch(`/api/sync/chats/${encodeURIComponent(chatId)}`, {
+    method: "DELETE",
+  });
+}
