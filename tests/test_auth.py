@@ -67,9 +67,13 @@ def mail(monkeypatch):
     async def cap_exists(to):
         captured["exists"] = to
 
+    async def cap_alert(new_email, recipients):
+        captured["alert"] = (new_email, list(recipients))
+
     monkeypatch.setattr(email_service, "send_verification_email", cap_verify)
     monkeypatch.setattr(email_service, "send_password_reset_email", cap_reset)
     monkeypatch.setattr(email_service, "send_account_exists_email", cap_exists)
+    monkeypatch.setattr(email_service, "send_new_signup_alert", cap_alert)
     return captured
 
 
@@ -111,7 +115,28 @@ def test_signup_duplicate_does_not_enumerate(client, mail):
     assert rows[0][0] == 1
 
 
-def test_login_wrong_password_is_generic_401(client, mail):
+def test_signup_alerts_founders_when_configured(client, mail, monkeypatch):
+    monkeypatch.setattr(settings, "SIGNUP_ALERT_EMAILS", ["founder@branch-chat.com"])
+    assert _signup(client).status_code == 201
+    # The founder alert fired with the new address + configured recipients.
+    assert mail["alert"] == ("new@example.com", ["founder@branch-chat.com"])
+
+
+def test_signup_no_alert_when_unconfigured(client, mail, monkeypatch):
+    monkeypatch.setattr(settings, "SIGNUP_ALERT_EMAILS", [])
+    assert _signup(client).status_code == 201
+    assert "verify" in mail  # the user still gets their verification email
+    assert "alert" not in mail
+
+
+def test_duplicate_signup_does_not_alert(client, mail, monkeypatch):
+    monkeypatch.setattr(settings, "SIGNUP_ALERT_EMAILS", ["founder@branch-chat.com"])
+    assert _signup(client).status_code == 201
+    mail.pop("alert", None)
+    # A repeat signup with the same email is the "already registered" branch —
+    # no new account, so no founder alert (and no enumeration signal).
+    assert _signup(client, email="new@example.com").status_code == 201
+    assert "alert" not in mail
     _signup(client)
     r = client.post(
         "/api/auth/login", json={"email": "new@example.com", "password": "wrong-password-xx"}

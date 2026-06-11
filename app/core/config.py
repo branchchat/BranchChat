@@ -141,6 +141,10 @@ class Settings(BaseSettings):
     # (every admin route 404s). Use a long random value in production.
     ADMIN_API_TOKEN: str | None = None
 
+    # Founders who get an email when a new account is created (CSV). Unset =
+    # no signup alerts. The new user's verification email is unaffected.
+    SIGNUP_ALERT_EMAILS: Annotated[list[str], NoDecode] = []
+
     # -- Email (Resend) + token TTLs ----------------------------------------
     RESEND_API_KEY: str | None = None
     RESEND_FROM_EMAIL: str | None = None
@@ -186,7 +190,9 @@ class Settings(BaseSettings):
     # -- Legacy server-persisted tree API (off by default) ------------------
     ENABLE_LEGACY_TREE_API: bool = False
 
-    @field_validator("CORS_ORIGINS", "ALLOWED_HOSTS", mode="before")
+    @field_validator(
+        "CORS_ORIGINS", "ALLOWED_HOSTS", "SIGNUP_ALERT_EMAILS", mode="before"
+    )
     @classmethod
     def _split_csv(cls, v: object) -> object:
         # Accept comma-separated env strings ("a,b,c") as well as real lists.

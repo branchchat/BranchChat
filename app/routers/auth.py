@@ -109,6 +109,14 @@ async def signup(
         analytics.identify(uid, {"email": email})
         analytics.capture(uid, "user_signed_up", {})
         background.add_task(email_service.send_verification_email, email, raw_verify)
+        # Founder heads-up (also deferred, so no latency or enumeration signal).
+        # No-op unless SIGNUP_ALERT_EMAILS is configured.
+        if settings.SIGNUP_ALERT_EMAILS:
+            background.add_task(
+                email_service.send_new_signup_alert,
+                email,
+                settings.SIGNUP_ALERT_EMAILS,
+            )
     else:
         # Already registered (or a create race): identical response, helpful email.
         background.add_task(email_service.send_account_exists_email, email)

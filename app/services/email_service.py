@@ -197,6 +197,67 @@ async def send_account_exists_email(to: str) -> None:
     )
 
 
+def _notice_layout(*, heading: str, body_html: str) -> str:
+    """Minimal internal-notice card (brand header + body, no button/footer).
+
+    For founder-facing operational emails (e.g. a new-signup heads-up), not
+    user-facing transactional mail.
+    """
+    return f"""\
+<!DOCTYPE html>
+<html>
+<body style="margin:0;padding:0;background-color:#f4f4f5;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
+         style="background-color:#f4f4f5;padding:32px 16px;">
+    <tr><td align="center">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
+             style="max-width:440px;">
+        <tr><td style="padding:0 8px 16px;">
+          <img src="{_BRAND_MARK}" width="28" height="28" alt=""
+               style="border-radius:8px;vertical-align:middle;">
+          <span style="font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+                       font-size:16px;font-weight:700;color:#18181b;vertical-align:middle;
+                       padding-left:8px;">BranchChat</span>
+        </td></tr>
+        <tr><td style="background-color:#ffffff;border-radius:16px;padding:32px;
+                       font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+          <h1 style="margin:0 0 12px;font-size:18px;line-height:1.3;font-weight:700;
+                     color:#18181b;">{heading}</h1>
+          <div style="font-size:14px;line-height:1.6;color:#52525b;">{body_html}</div>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>"""
+
+
+async def send_new_signup_alert(new_email: str, recipients: list[str]) -> None:
+    """Heads-up to the founders that a new account was created and needs review.
+
+    No-op when no recipients are configured (SIGNUP_ALERT_EMAILS unset). Sent
+    from a BackgroundTask so it never adds latency to (or a timing signal on)
+    the signup response.
+    """
+    if not recipients:
+        return
+    code = (
+        '<code style="background:#f1f1f4;padding:2px 6px;border-radius:6px;'
+        'font-size:13px;color:#18181b;">'
+    )
+    html = _notice_layout(
+        heading="New BranchChat signup",
+        body_html=(
+            f'<p style="margin:0 0 12px;"><strong style="color:#18181b;">{new_email}</strong> '
+            "just created an account and is awaiting beta approval.</p>"
+            f'<p style="margin:0;">Approve them with {code}beta-admin.ps1 approve '
+            f"{new_email}</code> (or revoke / ignore if it looks like spam).</p>"
+        ),
+    )
+    for to in recipients:
+        await _send(to, f"New signup: {new_email}", html)
+
+
 async def send_beta_approved_email(to: str) -> None:
     """Sent when an admin grants beta access (see routers/admin.py)."""
     await _send(
