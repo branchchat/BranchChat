@@ -6,6 +6,7 @@ import { motion, useReducedMotion } from "motion/react";
 import { Brand } from "@/components/landing/Brand";
 import { SampleChat } from "@/components/landing/SampleChat";
 import { WaitlistForm } from "@/components/landing/WaitlistForm";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { openCookieSettings } from "@/lib/consent";
 
 // Scroll-reveal: fade + rise as the element enters the viewport (once).
@@ -64,6 +65,7 @@ export function Landing() {
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
           <Brand />
           <div className="flex items-center gap-4">
+            <ThemeToggle className="-mr-1" />
             <Link
               to="/beta"
               className="text-sm text-muted-foreground transition-colors hover:text-foreground"

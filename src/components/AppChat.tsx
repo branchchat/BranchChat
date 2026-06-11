@@ -16,6 +16,7 @@ import { CompareView } from "@/components/CompareView"
 import { FeedbackButton } from "@/components/FeedbackButton"
 import { FocusView } from "@/components/FocusView"
 import { InputBar } from "@/components/InputBar"
+import { ThemeToggle } from "@/components/ThemeToggle"
 import { Toolbar } from "@/components/Toolbar"
 import { UsageMeter } from "@/components/UsageMeter"
 import { VerifyEmailBanner } from "@/components/VerifyEmailBanner"
@@ -67,6 +68,7 @@ export function AppChat() {
             Compare
           </Button>
           <FeedbackButton />
+          <ThemeToggle />
           <UsageMeter />
           <AuthControls />
           <Link
