@@ -50,31 +50,49 @@ test("demo → search → click result → node selected and centered", async ({
   expect(Math.abs(cy - viewport.height / 2)).toBeLessThan(viewport.height / 4);
 });
 
-test("long replies clamp on the canvas but open in full via Show more", async ({
+test("long replies scroll in place and open in full via Show more", async ({
   page,
 }) => {
   await page.goto("/app");
   await page.getByRole("button", { name: "Decline" }).click();
-  await page.getByRole("button", { name: "Demo: Kyoto trip" }).click();
+  await page.getByRole("button", { name: "Demo: Deep research" }).click();
 
-  // Center the long day-split reply first (search pans to it at zoom 1 —
-  // clicking tiny fit-view-zoomed targets is flaky).
-  await page.getByPlaceholder("Search all chats…").fill("Higashiyama");
-  await page.locator("nav button", { hasText: "Higashiyama" }).first().click();
+  // Center the long Opus deep-dive reply first (search pans to it at zoom 1
+  // — clicking tiny fit-view-zoomed targets is flaky). "stack pressure"
+  // (with the space) appears only in that node; the synthesis node spells
+  // it hyphenated.
+  await page.getByPlaceholder("Search all chats…").fill("stack pressure");
+  await page
+    .locator("nav button", { hasText: "stack pressure" })
+    .first()
+    .click();
   await page.waitForTimeout(600); // let the pan settle
 
-  // That reply is longer than the canvas clamp, so its node must offer
-  // "Show more"…
-  const node = page.locator(".react-flow__node", { hasText: "Higashiyama" });
+  const node = page.locator(".react-flow__node", { hasText: "stack pressure" });
+
+  // The clamped content scrolls IN PLACE: a wheel over it must scroll the
+  // container, not zoom the canvas (the `nowheel` contract).
+  const content = node.locator(".nowheel");
+  const box = await content.boundingBox();
+  expect(box).not.toBeNull();
+  if (!box) return;
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.wheel(0, 200);
+  await expect
+    .poll(() => content.evaluate((el) => el.scrollTop))
+    .toBeGreaterThan(0);
+
+  // It also offers "Show more", which expands the message into a popup with
+  // the FULL text.
   const showMore = node.getByRole("button", { name: "Show more" });
   await expect(showMore).toBeVisible();
   await showMore.click();
 
-  // …which expands the message into a popup with the FULL text (the canvas
-  // node only ever shows the first lines).
   const dialog = page.getByRole("dialog");
   await expect(dialog).toBeVisible();
-  await expect(dialog).toContainText("food and markets?");
+  await expect(dialog).toContainText(
+    "ask every team about stack pressure first",
+  );
 });
 
 test("nodes can be dragged and keep their new position", async ({ page }) => {

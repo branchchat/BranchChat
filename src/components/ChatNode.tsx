@@ -66,8 +66,9 @@ const ChatNodeBody = memo(function ChatNodeBody({
 
   // Long replies are clamped on the canvas (the layout's row height is
   // fixed, so a node can't grow in place without overlapping its children).
-  // When the clamp actually cuts something off, offer "Show more", which
-  // expands this message into a large popup — full text, scrollable.
+  // The clamped area scrolls in place; when the clamp actually cuts
+  // something off, also offer "Show more", which expands this message into
+  // a large popup — full text, no scrubbing inside a small box.
   const contentRef = useRef<HTMLDivElement>(null);
   const [clamped, setClamped] = useState(false);
   const [expanded, setExpanded] = useState(false);
@@ -189,10 +190,14 @@ const ChatNodeBody = memo(function ChatNodeBody({
                   it); plain text for user/system — people expect their own
                   asterisks untouched. max-h clamp instead of line-clamp so
                   block elements (lists, code) clamp too; the ref measures
-                  overflow either way. */}
+                  overflow either way. Overflowing content scrolls IN PLACE:
+                  `nowheel` makes React Flow hand the wheel to this container
+                  instead of zooming the canvas, and `nodrag` keeps a
+                  scrollbar drag from moving the node (drag from the header
+                  or card edges instead). */}
               <div
                 ref={contentRef}
-                className="max-h-[7.5rem] overflow-hidden"
+                className="nodrag nowheel max-h-[12rem] overflow-y-auto [scrollbar-width:thin] [overflow-anchor:none]"
               >
                 {node.role === "assistant" && !node.isError && node.content ? (
                   <Markdown>{node.content}</Markdown>
