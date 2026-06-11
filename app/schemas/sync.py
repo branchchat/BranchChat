@@ -14,6 +14,10 @@ class SyncManifestEntry(BaseModel):
     chat_id: str
     title: str | None = None
     updated_at: int  # the chat's updatedAt, epoch ms (the LWW version)
+    # True = this chat was deliberately deleted (tombstone): other devices
+    # should drop their local copy unless theirs is strictly newer, in which
+    # case their push resurrects it.
+    deleted: bool = False
 
 
 class SyncManifest(BaseModel):
@@ -35,6 +39,7 @@ class SyncPutRequest(BaseModel):
 
 class SyncPutResponse(BaseModel):
     # "stored" = accepted; "stale" = server already has a newer version (the
-    # client should pull instead of pushing again).
+    # client should pull instead of pushing again); "deleted" = this chat is
+    # tombstoned and the push wasn't newer (the client should drop its copy).
     status: str
     updated_at: int

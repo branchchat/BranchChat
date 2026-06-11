@@ -5,12 +5,20 @@ frontend opts into. Blobs are opaque (the frontend's versioned export
 envelope) and conflict resolution is last-write-wins on the chat's own
 ``updatedAt`` ms timestamp:
 
-* ``GET    /api/sync/chats``            → manifest (ids + versions, no payloads)
-* ``GET    /api/sync/chats/{chat_id}``  → one chat's payload
+* ``GET    /api/sync/chats``            → manifest (ids + versions, no payloads;
+                                          includes ``deleted`` tombstone entries)
+* ``GET    /api/sync/chats/{chat_id}``  → one chat's payload (404 if tombstoned)
 * ``PUT    /api/sync/chats/{chat_id}``  → upsert; replies "stale" (200) when the
-                                          server copy is newer instead of erroring,
-                                          so the client just pulls
-* ``DELETE /api/sync/chats/{chat_id}``  → remove the server copy
+                                          server copy is newer, and "deleted"
+                                          when the chat is tombstoned and the
+                                          push isn't strictly newer
+* ``DELETE /api/sync/chats/{chat_id}``  → SOFT delete: the row becomes a
+                                          tombstone (payload/title cleared) so
+                                          every device learns about the delete
+                                          via the manifest and a stale offline
+                                          copy can't re-push it back to life.
+                                          A strictly newer push resurrects
+                                          (LWW, like the rest of sync).
 
 Every operation runs inside ``rls_tx`` with the caller's user id, so the
 forced RLS policy on ``synced_chats`` is the real isolation boundary — the
@@ -23,7 +31,7 @@ import json
 import re
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import delete, func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -70,6 +78,7 @@ async def list_chats(
                     SyncedChat.chat_id,
                     SyncedChat.title,
                     SyncedChat.client_updated_at,
+                    SyncedChat.deleted_at,
                 ).order_by(SyncedChat.client_updated_at.desc())
             )
         ).all()
@@ -84,7 +93,10 @@ def _manifest_entry(row) -> SyncManifestEntry:
     except sync_crypto.SealedPayloadError:
         title = None
     return SyncManifestEntry(
-        chat_id=row.chat_id, title=title, updated_at=row.client_updated_at
+        chat_id=row.chat_id,
+        title=title,
+        updated_at=row.client_updated_at,
+        deleted=row.deleted_at is not None,
     )
 
 
@@ -101,7 +113,7 @@ async def get_chat(
                 select(SyncedChat).where(SyncedChat.chat_id == chat_id)
             )
         ).scalar_one_or_none()
-    if row is None:
+    if row is None or row.deleted_at is not None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Chat not found.")
     try:
         payload = sync_crypto.unseal(row.payload)
@@ -146,21 +158,33 @@ async def put_chat(
         )
 
     async with rls_tx(session, str(user.id)):
-        existing_version = (
+        existing = (
             await session.execute(
-                select(SyncedChat.client_updated_at).where(
-                    SyncedChat.chat_id == chat_id
-                )
+                select(
+                    SyncedChat.client_updated_at, SyncedChat.deleted_at
+                ).where(SyncedChat.chat_id == chat_id)
             )
-        ).scalar_one_or_none()
+        ).one_or_none()
 
-        if existing_version is not None and existing_version > req.updated_at:
-            return SyncPutResponse(status="stale", updated_at=existing_version)
+        if existing is not None:
+            version, deleted_at = existing
+            if deleted_at is not None and req.updated_at <= version:
+                # Tombstoned and the push isn't strictly newer: the delete
+                # wins (this is exactly the stale-offline-device re-push).
+                # Ties go to the tombstone — the delete superseded that
+                # version. The client drops its local copy.
+                return SyncPutResponse(status="deleted", updated_at=version)
+            if deleted_at is None and version > req.updated_at:
+                return SyncPutResponse(status="stale", updated_at=version)
 
-        if existing_version is None:
+        if existing is None:
+            # Tombstones don't count toward the cap — they're bookkeeping,
+            # not stored conversations.
             count = (
                 await session.execute(
-                    select(func.count()).select_from(SyncedChat)
+                    select(func.count())
+                    .select_from(SyncedChat)
+                    .where(SyncedChat.deleted_at.is_(None))
                 )
             ).scalar_one()
             if count >= MAX_CHATS_PER_USER:
@@ -178,6 +202,7 @@ async def put_chat(
             title=sync_crypto.seal_text(req.title),
             payload=sync_crypto.seal(req.payload),
             client_updated_at=req.updated_at,
+            deleted_at=None,
         )
         stmt = stmt.on_conflict_do_update(
             index_elements=[SyncedChat.user_id, SyncedChat.chat_id],
@@ -186,6 +211,9 @@ async def put_chat(
                 "payload": stmt.excluded.payload,
                 "client_updated_at": stmt.excluded.client_updated_at,
                 "synced_at": func.now(),
+                # A write that gets here is strictly newer than any tombstone
+                # (checked above), so it resurrects the chat.
+                "deleted_at": None,
             },
             # Guard the race between our version read and the upsert: only let
             # an equal-or-newer write through (the policy already scopes rows
@@ -203,7 +231,17 @@ async def delete_chat(
     session: AsyncSession = Depends(get_db),
 ) -> None:
     _validate_chat_id(chat_id)
+    # Soft delete: keep the row as a tombstone (the manifest broadcasts it to
+    # other devices) but clear the conversation data — deleted means gone from
+    # the server's readable storage, not just hidden. `client_updated_at` is
+    # kept as the version the delete superseded: a re-push at or below it is
+    # rejected, a strictly newer one resurrects. Idempotent (204 either way).
     async with rls_tx(session, str(user.id)):
         await session.execute(
-            delete(SyncedChat).where(SyncedChat.chat_id == chat_id)
+            update(SyncedChat)
+            .where(
+                SyncedChat.chat_id == chat_id,
+                SyncedChat.deleted_at.is_(None),
+            )
+            .values(deleted_at=func.now(), payload={}, title=None)
         )

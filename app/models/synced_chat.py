@@ -44,3 +44,9 @@ class SyncedChat(Base):
     synced_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=text("now()")
     )
+    # Soft-delete tombstone (migration 0010). Set = the chat was deliberately
+    # deleted: payload/title are cleared, the manifest broadcasts the deletion
+    # to other devices, and a stale re-push is rejected. NULL = live.
+    deleted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )

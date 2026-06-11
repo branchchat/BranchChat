@@ -112,7 +112,12 @@ def test_put_get_manifest_delete_roundtrip():
         r = c.get("/api/sync/chats")
         assert r.status_code == 200
         assert r.json()["chats"] == [
-            {"chat_id": "chat_1", "title": "Kyoto", "updated_at": 1000}
+            {
+                "chat_id": "chat_1",
+                "title": "Kyoto",
+                "updated_at": 1000,
+                "deleted": False,
+            }
         ]
 
         r = c.get("/api/sync/chats/chat_1")
@@ -123,7 +128,17 @@ def test_put_get_manifest_delete_roundtrip():
 
         assert c.delete("/api/sync/chats/chat_1").status_code == 204
         assert c.get("/api/sync/chats/chat_1").status_code == 404
-        assert c.get("/api/sync/chats").json()["chats"] == []
+        # The delete is now a TOMBSTONE the manifest broadcasts (so other
+        # devices drop their copies), not a vanished row.
+        manifest = c.get("/api/sync/chats").json()["chats"]
+        assert manifest == [
+            {
+                "chat_id": "chat_1",
+                "title": None,
+                "updated_at": 1000,
+                "deleted": True,
+            }
+        ]
     finally:
         c.__exit__(None, None, None)
 
@@ -180,6 +195,85 @@ def test_users_are_isolated_even_with_guessed_ids():
     finally:
         a.__exit__(None, None, None)
         b.__exit__(None, None, None)
+
+
+def test_deleted_chat_rejects_stale_repush_but_newer_resurrects():
+    c = _signed_in_client("tombstone@example.com")
+    try:
+        c.put(
+            "/api/sync/chats/chat_t",
+            json={"payload": _chat_payload("v100", 100), "updated_at": 100, "title": "t"},
+        )
+        assert c.delete("/api/sync/chats/chat_t").status_code == 204
+
+        # A stale offline device re-pushing the same (or older) version is the
+        # resurrection bug — the tombstone must win, including on a tie.
+        for stale_version in (50, 100):
+            r = c.put(
+                "/api/sync/chats/chat_t",
+                json={
+                    "payload": _chat_payload("stale", stale_version),
+                    "updated_at": stale_version,
+                },
+            )
+            assert r.status_code == 200
+            assert r.json() == {"status": "deleted", "updated_at": 100}
+        assert c.get("/api/sync/chats/chat_t").status_code == 404
+
+        # A strictly newer push is real new content → resurrect (LWW).
+        r = c.put(
+            "/api/sync/chats/chat_t",
+            json={"payload": _chat_payload("reborn", 200), "updated_at": 200, "title": "reborn"},
+        )
+        assert r.json() == {"status": "stored", "updated_at": 200}
+        body = c.get("/api/sync/chats/chat_t").json()
+        assert body["payload"]["chat"]["title"] == "reborn"
+        manifest = c.get("/api/sync/chats").json()["chats"]
+        assert manifest[0]["deleted"] is False
+    finally:
+        c.__exit__(None, None, None)
+
+
+def test_tombstone_clears_conversation_data_at_rest():
+    c = _signed_in_client("tombdata@example.com")
+    try:
+        secret = "do not keep me after deletion"
+        c.put(
+            "/api/sync/chats/chat_d",
+            json={"payload": _chat_payload(secret, 1), "updated_at": 1, "title": secret},
+        )
+        assert c.delete("/api/sync/chats/chat_d").status_code == 204
+        rows = _run(
+            _admin(
+                "SELECT payload::text, title, deleted_at FROM synced_chats "
+                "WHERE chat_id = 'chat_d'"
+            )
+        )
+        raw_payload, raw_title, deleted_at = rows[0]
+        assert deleted_at is not None
+        assert raw_payload == "{}"
+        assert raw_title is None
+    finally:
+        c.__exit__(None, None, None)
+
+
+def test_tombstones_do_not_count_toward_chat_cap(monkeypatch):
+    monkeypatch.setattr(sync_router, "MAX_CHATS_PER_USER", 1)
+    c = _signed_in_client("tombcap@example.com")
+    try:
+        c.put(
+            "/api/sync/chats/chat_a",
+            json={"payload": _chat_payload("a", 1), "updated_at": 1},
+        )
+        assert c.delete("/api/sync/chats/chat_a").status_code == 204
+        # The tombstone is the only row; a NEW chat must still fit the cap.
+        r = c.put(
+            "/api/sync/chats/chat_b",
+            json={"payload": _chat_payload("b", 2), "updated_at": 2},
+        )
+        assert r.json()["status"] == "stored"
+    finally:
+        c.__exit__(None, None, None)
 
 
 def test_invalid_chat_id_rejected():
