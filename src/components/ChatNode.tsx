@@ -122,6 +122,7 @@ const ChatNodeBody = memo(function ChatNodeBody({
             display-only — connections happen via the side context ports. */}
         {!isRoot && (
           <Handle
+            id="tree-in"
             type="target"
             position={Position.Top}
             isConnectable={false}
@@ -260,6 +261,7 @@ const ChatNodeBody = memo(function ChatNodeBody({
 
         {/* Outgoing edge to children (display-only, see above). */}
         <Handle
+          id="tree-out"
           type="source"
           position={Position.Bottom}
           isConnectable={false}

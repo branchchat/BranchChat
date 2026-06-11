@@ -92,12 +92,17 @@ export function Canvas() {
 
     const flowEdges: Edge[] = [];
     for (const n of Object.values(chat.nodes)) {
-      // Tree edges (parent → child).
+      // Tree edges (parent → child). Handle ids are REQUIRED here: each node
+      // also carries side context ports of the same types, and an edge
+      // without an explicit handle id attaches to whichever handle React
+      // Flow registered first (tree edges came out of the right-side port).
       if (n.parentId) {
         flowEdges.push({
           id: `${n.parentId}->${n.id}`,
           source: n.parentId,
+          sourceHandle: "tree-out",
           target: n.id,
+          targetHandle: "tree-in",
         });
       }
       // Context links (cross-branch, dashed/animated): `n` pulls the linked
