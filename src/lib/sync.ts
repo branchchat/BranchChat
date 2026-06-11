@@ -9,17 +9,21 @@
 //   pull: server copy newer (or missing locally)  → applySyncedChat
 //   push: local copy newer (or missing on server) → PUT
 //
-// Deleting a chat locally does NOT delete the server copy (a wiped browser
-// must not erase the backup — restore happens on the next pull). Errors are
-// swallowed into the status so an offline backend never breaks the app.
+// A DELIBERATE delete is honored: chatStore records a tombstone (see
+// syncTombstones), and this engine then deletes the server copy and never
+// re-pulls that id. A WIPED browser has no tombstones, so its chats still
+// restore on the next pull. Errors are swallowed into the status so an
+// offline backend never breaks the app.
 
 import {
+  deleteSyncedChat,
   fetchSyncManifest,
   fetchSyncedChat,
   isBackendConfigured,
   pushSyncedChat,
 } from "@/lib/api";
 import { EXPORT_VERSION, type SessionExport } from "@/lib/sessionTransfer";
+import { getTombstones } from "@/lib/syncTombstones";
 import { useAuthStore } from "@/store/authStore";
 import { useChatStore } from "@/store/chatStore";
 import type { ChatSessionState } from "@/types/chat";
@@ -100,10 +104,27 @@ export async function syncNow(): Promise<void> {
   try {
     const manifest = await fetchSyncManifest();
     const remote = new Map(manifest.map((m) => [m.chat_id, m.updated_at]));
+    const tombstones = getTombstones();
     const { chats, applySyncedChat } = useChatStore.getState();
 
-    // Pull everything the server has newer (or that we don't have at all).
+    // Honor deliberate deletes: remove the server copy of anything tombstoned
+    // here, and drop it from `remote` so the push pass doesn't re-create it.
+    // Best-effort — a failed delete just retries on the next pass.
+    for (const id of Object.keys(tombstones)) {
+      if (remote.has(id)) {
+        try {
+          await deleteSyncedChat(id);
+        } catch {
+          // Leave it on the server; the tombstone retries next pass.
+        }
+        remote.delete(id);
+      }
+    }
+
+    // Pull everything the server has newer (or that we don't have at all) —
+    // but never resurrect a chat the user deleted.
     for (const m of manifest) {
+      if (tombstones[m.chat_id]) continue;
       const local = chats[m.chat_id];
       if (!local || local.updatedAt < m.updated_at) {
         const synced = await fetchSyncedChat(m.chat_id);
@@ -119,6 +140,7 @@ export async function syncNow(): Promise<void> {
     // Re-read state: pulls above may have replaced chats.
     const current = useChatStore.getState().chats;
     for (const chat of Object.values(current)) {
+      if (tombstones[chat.id]) continue;
       const remoteVersion = remote.get(chat.id);
       if (remoteVersion === undefined || chat.updatedAt > remoteVersion) {
         const res = await pushSyncedChat(

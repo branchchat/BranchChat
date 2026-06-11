@@ -22,6 +22,7 @@ import {
 import { useAuthStore } from "@/store/authStore";
 import { DEMO_CHATS, type DemoKind } from "@/lib/demoChat";
 import { parseSession } from "@/lib/sessionTransfer";
+import { addTombstone } from "@/lib/syncTombstones";
 import type {
   ChatNode,
   ChatSessionState,
@@ -728,7 +729,12 @@ export const useChatStore = create<ChatStoreState>()(
           });
         },
 
-        deleteChat: (chatId) =>
+        deleteChat: (chatId) => {
+          if (!get().chats[chatId]) return;
+          // Remember the deliberate delete so sync removes the server copy and
+          // never restores it. A wiped browser has no tombstone, so its restore
+          // on next pull still works.
+          addTombstone(chatId);
           set((state) => {
             if (!state.chats[chatId]) return {};
             const chats = { ...state.chats };
@@ -747,7 +753,8 @@ export const useChatStore = create<ChatStoreState>()(
               )[0].id;
             }
             return { chats, activeChatId };
-          }),
+          });
+        },
 
         openNode: (chatId, nodeId) =>
           set((state) => {

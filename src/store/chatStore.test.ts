@@ -8,6 +8,7 @@ import {
   useChatStore,
 } from "@/store/chatStore";
 import { serializeChat } from "@/lib/sessionTransfer";
+import { isTombstoned } from "@/lib/syncTombstones";
 
 const store = () => useChatStore.getState();
 
@@ -58,6 +59,13 @@ describe("chat management actions", () => {
     for (const id of Object.keys(store().chats)) store().deleteChat(id);
     expect(Object.keys(store().chats).length).toBe(1);
     expect(store().chats[store().activeChatId]).toBeDefined();
+  });
+
+  it("records a sync tombstone on delete so it can't be restored", () => {
+    const a = store().createChat({ title: "A" });
+    store().createChat({ title: "B" }); // keep the store non-empty
+    store().deleteChat(a);
+    expect(isTombstoned(a)).toBe(true);
   });
 
   it("loadDemoChat adds a branching demo and switches to it", () => {

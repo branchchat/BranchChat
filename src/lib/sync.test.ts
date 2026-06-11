@@ -7,6 +7,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { isSyncEnabled, setSyncEnabled, syncNow } from "@/lib/sync";
+import { addTombstone } from "@/lib/syncTombstones";
 import { useAuthStore } from "@/store/authStore";
 import { useChatStore } from "@/store/chatStore";
 import type { ChatSessionState } from "@/types/chat";
@@ -122,6 +123,21 @@ describe("syncNow", () => {
 
     expect(api.fetchSyncedChat).not.toHaveBeenCalled();
     expect(api.pushSyncedChat).not.toHaveBeenCalled();
+  });
+
+  it("deletes the server copy of a tombstoned chat and never re-pulls it", async () => {
+    // The chat is gone locally and tombstoned; the server still has it.
+    addTombstone("chat_x");
+    api.fetchSyncManifest.mockResolvedValue([
+      { chat_id: "chat_x", title: "deleted", updated_at: 100 },
+    ]);
+
+    await syncNow();
+
+    expect(api.deleteSyncedChat).toHaveBeenCalledWith("chat_x");
+    // Not restored into the store, and not downloaded.
+    expect(api.fetchSyncedChat).not.toHaveBeenCalled();
+    expect(useChatStore.getState().chats.chat_x).toBeUndefined();
   });
 
   it("does nothing when disabled or signed out", async () => {
