@@ -247,22 +247,11 @@ export function ModelPicker({
   const recommendedHeading =
     TASK_HEADING[recommended[0]?.task ?? ""] ?? TASK_HEADING.general;
 
-  // Cross-provider superlatives ("Best for coding → Claude Opus 4.8"), read
-  // straight from the catalog badges so the guide can never drift from the
-  // per-model copy. The catalog keeps each "Best …" badge globally unique.
-  const atAGlance = useMemo(() => {
-    const out: { badge: string; model: ModelInfo }[] = [];
-    for (const m of models ?? []) {
-      for (const b of m.badges) {
-        if (/^(best|most|fastest)/i.test(b)) out.push({ badge: b, model: m });
-      }
-    }
-    return out;
-  }, [models]);
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[80vh] gap-0 overflow-y-auto sm:max-w-md">
+      {/* Scrolls without visible scrollbars (Firefox: scrollbar-width;
+          WebKit: ::-webkit-scrollbar) — the chrome read as clutter. */}
+      <DialogContent className="max-h-[80vh] gap-0 overflow-y-auto overflow-x-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:max-w-md">
         <DialogHeader className="pb-4">
           <DialogTitle>Branch with a model</DialogTitle>
           <DialogDescription>
@@ -316,32 +305,6 @@ export function ModelPicker({
                   </section>
                 )
               ))}
-
-            {atAGlance.length > 0 && (
-              <section aria-label="Best model by task">
-                <h3 className="text-muted-foreground mb-2 text-xs font-medium">
-                  At a glance
-                </h3>
-                <ul className="grid grid-cols-1 gap-x-3 gap-y-1 sm:grid-cols-2">
-                  {atAGlance.map(({ badge, model }) => (
-                    <li key={`${model.id}:${badge}`}>
-                      <button
-                        type="button"
-                        onClick={() => pick(model.provider, model.id, model.label)}
-                        className="group flex w-full cursor-pointer items-baseline justify-between gap-2 rounded-md px-2 py-1 text-left transition-colors hover:bg-accent"
-                      >
-                        <span className="text-muted-foreground shrink-0 text-xs">
-                          {badge}
-                        </span>
-                        <span className="group-hover:text-foreground truncate text-xs font-medium">
-                          {model.label}
-                        </span>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            )}
 
             <section aria-label="All models">
               <div className="mb-2 flex items-baseline justify-between">
