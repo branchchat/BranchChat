@@ -17,9 +17,9 @@ log them server-side instead, so vendor errors can't leak to users.
 from __future__ import annotations
 
 import abc
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
-from app.schemas.chat import ProviderMessage
+from app.schemas.chat import Attachment, ProviderMessage
 
 
 class ProviderNotConfiguredError(Exception):
@@ -56,6 +56,11 @@ class GenerationRequest:
     history: list[ProviderMessage]
     message: str
     max_output_tokens: int
+    # Files riding with the NEW message only — history stays text (replaying
+    # megabytes of base64 per turn would blow up every request after the
+    # first; the UI tells users an attachment applies to the message it's
+    # sent with). Already validated/capped by the schema and service layer.
+    attachments: list[Attachment] = field(default_factory=list)
 
 
 def merge_alternating(

@@ -103,9 +103,11 @@ async def chat(
     session: AsyncSession = Depends(get_db),
     _rl: None = Depends(ai_rate_limit),
 ) -> ChatResponse:
-    # Reject unknown providers/models BEFORE charging quota — a typo'd URL or
-    # model id must not burn a daily message.
+    # Reject unknown providers/models and unsupported attachments BEFORE
+    # charging quota — a typo'd URL, model id, or a PDF aimed at a provider
+    # that can't read it must not burn a daily message.
     _, model_id = chat_service.resolve_provider_and_model(provider, req.model)
+    chat_service.ensure_attachments_supported(provider, model_id, req.attachments)
 
     # Private beta: only approved accounts may reach the providers at all.
     await _require_beta_access(session, ctx)

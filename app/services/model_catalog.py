@@ -108,7 +108,7 @@ def _static_catalog() -> tuple[ModelInfo, ...]:
             provider="gemini",
             id="gemini-2.5-pro",
             label="Gemini 2.5 Pro",
-            description="Digests huge documents, codebases, and video/images.",
+            description="Digests huge documents, images, and full codebases.",
             strengths=(
                 "very-long-context synthesis",
                 "multimodal analysis",
@@ -119,7 +119,7 @@ def _static_catalog() -> tuple[ModelInfo, ...]:
             multimodal=True,
             speed="slow",
             cost_tier="medium",
-            badges=("Best for huge documents", "Best for images & video"),
+            badges=("Best for huge documents", "Best for images & PDFs"),
             task_scores={
                 "coding": 0.85,
                 "research": 0.90,

@@ -46,7 +46,29 @@ class AnthropicProvider(AIProvider):
         transcript = merge_alternating(
             [*req.history, ProviderMessage(role="user", content=req.message)]
         )
-        messages = [{"role": m.role, "content": m.content} for m in transcript]
+        messages: list[dict] = [
+            {"role": m.role, "content": m.content} for m in transcript
+        ]
+
+        # Attachments ride on the final user turn as content blocks (images
+        # and PDFs share the base64-source shape; only the block type
+        # differs), with the text last so the question follows the media.
+        if req.attachments and messages and messages[-1]["role"] == "user":
+            blocks = [
+                {
+                    "type": "document"
+                    if a.media_type == "application/pdf"
+                    else "image",
+                    "source": {
+                        "type": "base64",
+                        "media_type": a.media_type,
+                        "data": a.data,
+                    },
+                }
+                for a in req.attachments
+            ]
+            blocks.append({"type": "text", "text": messages[-1]["content"]})
+            messages[-1] = {"role": "user", "content": blocks}
 
         body = {
             "model": req.model,
@@ -60,6 +82,16 @@ class AnthropicProvider(AIProvider):
             # caching, which is fine.
             "cache_control": {"type": "ephemeral"},
         }
+        # Adaptive thinking (the model decides when/how deeply to reason) is
+        # opt-in on this API — omitting it runs the model with thinking OFF,
+        # which wastes exactly what the premium bucket pays for. Only the 4.6+
+        # generation accepts {type: "adaptive"}; Haiku 4.5 still uses the old
+        # budget scheme, so it stays as-is. Thinking tokens bill as output and
+        # draw from max_tokens, so give the cap headroom — it's a ceiling, not
+        # a target.
+        if req.model.startswith(("claude-opus-4-8", "claude-sonnet-4-6")):
+            body["thinking"] = {"type": "adaptive"}
+            body["max_tokens"] = req.max_output_tokens + 6144
 
         try:
             async with httpx.AsyncClient(

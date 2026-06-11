@@ -19,11 +19,38 @@ per-mode limits from settings (the client already truncates to the same).
 
 from __future__ import annotations
 
+import base64
 from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field, field_validator
 
 Role = Literal["system", "user", "assistant"]
+
+AttachmentMediaType = Literal[
+    "image/png", "image/jpeg", "image/webp", "image/gif", "application/pdf"
+]
+
+
+class Attachment(BaseModel):
+    """One file attached to the CURRENT message (never replayed in history).
+
+    ``data`` is raw base64 (no ``data:`` prefix). The per-item cap (~1.4 MB
+    binary) and the 3-item list cap below keep the request inside the global
+    body limit; the bytes are forwarded to the provider and never stored.
+    """
+
+    name: Annotated[str, Field(max_length=120)] = "attachment"
+    media_type: AttachmentMediaType
+    data: Annotated[str, Field(min_length=1, max_length=1_900_000)]
+
+    @field_validator("data")
+    @classmethod
+    def _valid_base64(cls, v: str) -> str:
+        try:
+            base64.b64decode(v, validate=True)
+        except Exception:  # noqa: BLE001 - any decode failure = bad payload
+            raise ValueError("attachment data must be base64") from None
+        return v
 
 
 class ProviderMessage(BaseModel):
@@ -49,6 +76,11 @@ class ChatRequest(BaseModel):
         list[LinkedContextBlock], Field(max_length=16)
     ] = Field(default_factory=list)
     coding_mode: bool = False
+    # Files riding with THIS message (images everywhere multimodal; PDFs where
+    # the provider accepts them inline — enforced in the service layer).
+    attachments: Annotated[list[Attachment], Field(max_length=3)] = Field(
+        default_factory=list
+    )
     personalization: Annotated[str | None, Field(max_length=4_000)] = None
     # Optional model override for the branch; validated against the model
     # catalog in the service layer (a schema validator can't see the path's

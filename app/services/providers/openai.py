@@ -38,9 +38,26 @@ class OpenAIProvider(AIProvider):
         if not self.is_configured():
             raise ProviderNotConfiguredError()
 
-        messages = [{"role": "system", "content": req.system_instruction}]
+        messages: list[dict] = [
+            {"role": "system", "content": req.system_instruction}
+        ]
         messages += [{"role": m.role, "content": m.content} for m in req.history]
-        messages.append({"role": "user", "content": req.message})
+        if req.attachments:
+            # Images only on this API (PDFs are gated out in the service
+            # layer); data URLs on the final user turn, text last.
+            content: list[dict] = [
+                {
+                    "type": "image_url",
+                    "image_url": {
+                        "url": f"data:{a.media_type};base64,{a.data}"
+                    },
+                }
+                for a in req.attachments
+            ]
+            content.append({"type": "text", "text": req.message})
+            messages.append({"role": "user", "content": content})
+        else:
+            messages.append({"role": "user", "content": req.message})
 
         body = {
             "model": req.model,

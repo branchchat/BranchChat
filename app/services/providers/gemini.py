@@ -32,7 +32,7 @@ class _UpstreamRetryable(Exception):
     """Upstream failure worth retrying on the fallback model."""
 
 
-def _to_contents(history, message: str) -> list[dict]:
+def _to_contents(history, message: str, attachments=()) -> list[dict]:
     contents = [
         {
             "role": "model" if m.role == "assistant" else "user",
@@ -40,7 +40,14 @@ def _to_contents(history, message: str) -> list[dict]:
         }
         for m in history
     ]
-    contents.append({"role": "user", "parts": [{"text": message}]})
+    # Attachments ride only with the new message, ahead of its text (the
+    # vendor-recommended order for grounding the question in the media).
+    parts: list[dict] = [
+        {"inline_data": {"mime_type": a.media_type, "data": a.data}}
+        for a in attachments
+    ]
+    parts.append({"text": message})
+    contents.append({"role": "user", "parts": parts})
     return contents
 
 
@@ -97,7 +104,7 @@ class GeminiProvider(AIProvider):
         return "".join(p.get("text", "") for p in parts)
 
     async def generate(self, req: GenerationRequest) -> tuple[str, str]:
-        contents = _to_contents(req.history, req.message)
+        contents = _to_contents(req.history, req.message, req.attachments)
 
         models = [req.model]
         if (

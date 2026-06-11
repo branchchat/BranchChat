@@ -53,6 +53,35 @@ def resolve_provider_and_model(
     return provider, model_id
 
 
+def ensure_attachments_supported(
+    provider_name: str, model_id: str, attachments: list
+) -> None:
+    """422 when attachments can't reach this model — called BEFORE quota.
+
+    Images need a multimodal model; PDFs additionally need a vendor that
+    accepts them inline (Gemini and Anthropic do; OpenAI chat completions and
+    local Ollama don't). Detail strings are user-facing copy by contract.
+    """
+    if not attachments:
+        return
+    info = model_catalog.get_model(provider_name, model_id)
+    if info is None or not info.multimodal:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="This model doesn't support attachments.",
+        )
+    if any(
+        a.media_type == "application/pdf" for a in attachments
+    ) and provider_name not in ("gemini", "anthropic"):
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=(
+                "PDF attachments work with Gemini and Claude models — "
+                "pick one of those, or attach images instead."
+            ),
+        )
+
+
 async def generate_ai_response(
     *, provider_name: str, req: ChatRequest
 ) -> tuple[str, str]:
@@ -90,6 +119,7 @@ async def generate_ai_response(
         history=history,
         message=message,
         max_output_tokens=4096 if req.coding_mode else 2048,
+        attachments=req.attachments,
     )
 
     try:
