@@ -25,8 +25,10 @@ const ROLE_LABEL: Record<string, string> = {
   assistant: "assistant reply",
 };
 
-// A picked model waiting for its branch prompt to be typed.
-interface ArmedBranch extends ModelChoice {
+// A pending branch waiting for its prompt: armed by clicking "Branch" with an
+// empty draft (plain) or by picking a model with an empty draft.
+interface ArmedBranch {
+  model?: ModelChoice;
   parentId: string;
 }
 
@@ -65,9 +67,11 @@ export function InputBar() {
     // An armed model choice always wins: the chip told the user the next
     // message starts a model branch from the chosen node.
     if (armed && chat?.nodes[armed.parentId]) {
-      branchFromNode(armed.parentId, text, {
-        model: { provider: armed.provider, model: armed.model, label: armed.label },
-      });
+      branchFromNode(
+        armed.parentId,
+        text,
+        armed.model ? { model: armed.model } : undefined,
+      );
       setArmed(null);
     } else if (mode === "branch") {
       branchFromNode(selected.id, text);
@@ -95,7 +99,7 @@ export function InputBar() {
       setArmed(null);
     } else {
       // No prompt yet: arm the choice; the next submit branches with it.
-      setArmed({ parentId, ...choice });
+      setArmed({ parentId, model: choice });
     }
   };
 
@@ -128,11 +132,13 @@ export function InputBar() {
         {armed && (
           <div className="flex items-center gap-2">
             <Badge variant="secondary" className="gap-1.5 py-1">
-              <Bot className="size-3" />
-              Next message branches with {armed.label ?? armed.model}
+              {armed.model ? <Bot className="size-3" /> : <GitBranch className="size-3" />}
+              {armed.model
+                ? `Next message branches with ${armed.model.label ?? armed.model.model}`
+                : "Next message starts a new branch"}
               <button
                 type="button"
-                aria-label="Cancel model branch"
+                aria-label="Cancel branch"
                 className="ml-0.5 rounded-sm opacity-70 transition-opacity hover:opacity-100"
                 onClick={() => setArmed(null)}
               >
@@ -164,8 +170,15 @@ export function InputBar() {
           <Button
             type="button"
             variant="outline"
-            disabled={!canSend}
-            onClick={() => submit("branch")}
+            disabled={!selected}
+            onClick={() => {
+              if (!selected) return;
+              // With a draft, branch immediately; with an empty composer, arm
+              // branch mode so the next message starts the new branch (same
+              // affordance as "Branch with model").
+              if (draft.trim()) submit("branch");
+              else setArmed({ parentId: selected.id });
+            }}
           >
             <GitBranch className="size-4" />
             Branch
