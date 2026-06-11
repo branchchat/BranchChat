@@ -19,5 +19,8 @@ export default defineConfig({
     command: "npm run dev -- --port 5199 --strictPort",
     url: "http://localhost:5199",
     reuseExistingServer: !process.env.CI,
+    // No backend in e2e: an empty VITE_API_BASE (process env beats .env)
+    // makes the account gate step aside and keeps replies stubbed.
+    env: { VITE_API_BASE: "" },
   },
 });

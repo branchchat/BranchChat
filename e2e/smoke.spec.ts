@@ -7,8 +7,9 @@ import { expect, test } from "@playwright/test";
 test("demo → search → click result → node selected and centered", async ({
   page,
 }) => {
-  // The /app route sits behind the soft dev gate; ?key= unlocks it.
-  await page.goto("/app?key=letmebranch");
+  // /app is account-gated only when a backend is configured; the e2e dev
+  // server runs with VITE_API_BASE="" so the gate steps aside.
+  await page.goto("/app");
 
   // The cookie banner floats over the sidebar footer and intercepts clicks;
   // decline it (keeps PostHog off for the test run).

@@ -76,18 +76,30 @@ export function Beta() {
             style={{ animationDelay: "0.16s" }}
           >
             We're inviting a small group of testers to explore AI conversations
-            as branching trees. Drop your email and we'll send an invite.
+            as branching trees. Create an account to request access — we
+            approve testers in waves and email you when you're in.
           </p>
 
           <div
             className="bc-rise mx-auto mt-8 max-w-md"
             style={{ animationDelay: "0.24s" }}
           >
-            <WaitlistForm
-              source="beta"
-              cta="Request beta access"
-              note="No spam — just your invite and the occasional beta update. Unsubscribe anytime."
-            />
+            <Link
+              to="/app"
+              className="bc-press inline-flex h-11 w-full max-w-xs items-center justify-center rounded-xl bg-foreground text-sm font-medium text-background shadow-sm transition-colors hover:bg-foreground/90"
+            >
+              Create your account
+            </Link>
+            <p className="mt-3 text-xs text-muted-foreground">
+              Prefer email updates instead? Join the list below.
+            </p>
+            <div className="mt-3">
+              <WaitlistForm
+                source="beta"
+                cta="Keep me posted"
+                note="No spam — just beta updates. Unsubscribe anytime."
+              />
+            </div>
           </div>
         </div>
 

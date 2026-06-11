@@ -236,6 +236,8 @@ export interface AuthUser {
   id: string;
   email: string;
   email_verified: boolean;
+  // Manually granted by an admin; gates the live chat (private beta).
+  is_beta_tester: boolean;
   created_at: string;
 }
 

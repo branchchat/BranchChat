@@ -1,78 +1,33 @@
-import { useState, type FormEvent } from "react";
+// Account-gated /app — replaces the shared dev passphrase.
+//
+// The passphrase only hid the UI (and could leak); access is now a per-account
+// beta flag enforced SERVER-SIDE on the chat endpoints, so this gate is pure
+// UX. Three states: signed out → sign in / create account; signed in but
+// unapproved → "pending approval"; approved → the app.
+//
+// With no backend configured (local dev, e2e) the gate steps aside: replies
+// are stubbed there, so there are no tokens to protect.
+
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { Clock, LogOut, RefreshCw } from "lucide-react";
 
 import { AppChat } from "@/components/AppChat";
+import { AuthDialog } from "@/components/AuthDialog";
 import { Brand } from "@/components/landing/Brand";
-import { checkUrlKey, hasDevAccess, tryPassphrase } from "@/lib/devAccess";
-import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { isBackendConfigured } from "@/lib/api";
 import { usePageMeta } from "@/lib/usePageMeta";
+import { useAuthStore } from "@/store/authStore";
 
-export function AppGate() {
-  // Distinct title so the gated app doesn't inherit the marketing homepage
-  // title (the /app route is Disallow'ed in robots.txt — no description needed).
-  usePageMeta("BranchChat App");
-
-  // Unlock from a stored flag, or from /app?key=<passphrase> on first load.
-  const [unlocked, setUnlocked] = useState(
-    () => hasDevAccess() || checkUrlKey(),
-  );
-  const [value, setValue] = useState("");
-  const [error, setError] = useState(false);
-
-  if (unlocked) return <AppChat />;
-
-  const submit = (e: FormEvent) => {
-    e.preventDefault();
-    if (tryPassphrase(value)) {
-      setUnlocked(true);
-    } else {
-      setError(true);
-      setValue("");
-    }
-  };
-
+function GateShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-[100dvh] flex-col items-center justify-center bg-background px-6">
       <div className="bc-rise w-full max-w-sm">
         <div className="mb-7 flex flex-col items-center text-center">
           <Brand />
-          <h1 className="mt-6 text-xl font-semibold tracking-tight">
-            Developer access
-          </h1>
-          <p className="mt-2 text-sm text-muted-foreground">
-            The chat is in private development. Enter the team passphrase to
-            continue.
-          </p>
+          {children}
         </div>
-        <form onSubmit={submit} className="flex flex-col gap-3">
-          <input
-            type="password"
-            autoFocus
-            value={value}
-            onChange={(e) => {
-              setValue(e.target.value);
-              setError(false);
-            }}
-            placeholder="Passphrase"
-            aria-label="Developer passphrase"
-            className={cn(
-              "h-11 rounded-xl border bg-background px-3.5 text-sm text-foreground shadow-sm outline-none transition-colors placeholder:text-muted-foreground",
-              "focus-visible:border-foreground/30 focus-visible:ring-2 focus-visible:ring-ring/30",
-              error && "border-destructive/60",
-            )}
-          />
-          <button
-            type="submit"
-            className="bc-press h-11 rounded-xl bg-foreground text-sm font-medium text-background shadow-sm hover:bg-foreground/90"
-          >
-            Enter
-          </button>
-          {error && (
-            <p className="text-xs text-destructive">
-              Incorrect passphrase. Try again.
-            </p>
-          )}
-        </form>
         <Link
           to="/"
           className="mt-6 block text-center text-xs text-muted-foreground transition-colors hover:text-foreground"
@@ -82,4 +37,96 @@ export function AppGate() {
       </div>
     </div>
   );
+}
+
+export function AppGate() {
+  // Distinct title so the gated app doesn't inherit the marketing homepage
+  // title (the /app route is Disallow'ed in robots.txt — no description needed).
+  usePageMeta("BranchChat App");
+
+  const user = useAuthStore((s) => s.user);
+  const hydrated = useAuthStore((s) => s.hydrated);
+  const hydrate = useAuthStore((s) => s.hydrate);
+  const logout = useAuthStore((s) => s.logout);
+  const [authOpen, setAuthOpen] = useState(false);
+  const [checking, setChecking] = useState(false);
+
+  // Resolve the session before deciding which gate state to show.
+  useEffect(() => {
+    if (!hydrated) void hydrate();
+  }, [hydrated, hydrate]);
+
+  if (!isBackendConfigured()) return <AppChat />;
+
+  if (!hydrated) {
+    return (
+      <GateShell>
+        <p className="mt-6 text-sm text-muted-foreground">Loading…</p>
+      </GateShell>
+    );
+  }
+
+  if (!user) {
+    return (
+      <GateShell>
+        <h1 className="mt-6 text-xl font-semibold tracking-tight">
+          Private beta
+        </h1>
+        <p className="mt-2 text-sm text-muted-foreground">
+          BranchChat is in a closed beta. Sign in, or create an account to
+          request access — we approve testers in waves.
+        </p>
+        <Button className="mt-6 w-full" onClick={() => setAuthOpen(true)}>
+          Sign in or create account
+        </Button>
+        <AuthDialog open={authOpen} onOpenChange={setAuthOpen} />
+      </GateShell>
+    );
+  }
+
+  if (!user.is_beta_tester) {
+    const recheck = async () => {
+      setChecking(true);
+      try {
+        await hydrate();
+      } finally {
+        setChecking(false);
+      }
+    };
+    return (
+      <GateShell>
+        <span className="mt-6 flex size-10 items-center justify-center rounded-full border bg-secondary/50">
+          <Clock className="size-4.5" />
+        </span>
+        <h1 className="mt-4 text-xl font-semibold tracking-tight">
+          You're on the list
+        </h1>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Your account ({user.email}) is awaiting beta approval. We approve
+          testers in waves and will email you the moment you're in.
+        </p>
+        <div className="mt-6 flex w-full gap-2">
+          <Button
+            variant="outline"
+            className="flex-1 gap-2"
+            onClick={() => void recheck()}
+            disabled={checking}
+          >
+            <RefreshCw className={checking ? "size-3.5 animate-spin" : "size-3.5"} />
+            Check again
+          </Button>
+          <Button
+            variant="ghost"
+            className="flex-1 gap-2 text-muted-foreground"
+            onClick={() => void logout()}
+          >
+            <LogOut className="size-3.5" />
+            Sign out
+          </Button>
+        </div>
+      </GateShell>
+    );
+  }
+
+  return <AppChat />;
 }
