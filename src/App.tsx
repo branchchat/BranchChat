@@ -13,6 +13,9 @@ import { CookieConsent } from "@/components/CookieConsent"
 const AppGate = lazy(() =>
   import("@/pages/AppGate").then((m) => ({ default: m.AppGate })),
 )
+const Beta = lazy(() =>
+  import("@/pages/Beta").then((m) => ({ default: m.Beta })),
+)
 const Privacy = lazy(() =>
   import("@/pages/Privacy").then((m) => ({ default: m.Privacy })),
 )
@@ -33,6 +36,7 @@ function App() {
         <Routes>
           <Route path="/" element={<Landing />} />
           <Route path="/app" element={<AppGate />} />
+          <Route path="/beta" element={<Beta />} />
           <Route path="/privacy" element={<Privacy />} />
           <Route path="/terms" element={<Terms />} />
           <Route path="/reset-password" element={<ResetPassword />} />

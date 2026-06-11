@@ -63,12 +63,20 @@ export function Landing() {
       <header className="sticky top-0 z-30 border-b border-border/60 bg-background/80 backdrop-blur">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
           <Brand />
-          <a
-            href="#waitlist"
-            className="bc-press hidden h-9 items-center rounded-xl bg-foreground px-4 text-sm font-medium text-background transition-transform hover:-translate-y-0.5 hover:bg-foreground/90 sm:inline-flex"
-          >
-            Join waitlist
-          </a>
+          <div className="flex items-center gap-4">
+            <Link
+              to="/beta"
+              className="text-sm text-muted-foreground transition-colors hover:text-foreground"
+            >
+              Beta access
+            </Link>
+            <a
+              href="#waitlist"
+              className="bc-press hidden h-9 items-center rounded-xl bg-foreground px-4 text-sm font-medium text-background transition-transform hover:-translate-y-0.5 hover:bg-foreground/90 sm:inline-flex"
+            >
+              Join waitlist
+            </a>
+          </div>
         </div>
       </header>
 
