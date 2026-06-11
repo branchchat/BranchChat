@@ -2,6 +2,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
 import {
+  buildLinkedContextBlocks,
   migratePersistedState,
   resolveModelForNode,
   useChatStore,
@@ -253,5 +254,130 @@ describe("importChat", () => {
 
   it("throws a user-facing error on a malformed file", () => {
     expect(() => store().importChat("{ broken")).toThrow(/valid JSON/);
+  });
+});
+
+describe("context links", () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  // A fresh chat with two sibling user nodes under the root.
+  const twoBranches = () => {
+    store().createChat({ title: "Links" });
+    const chat = store().chats[store().activeChatId];
+    const a = store().addNode(chat.rootId, {
+      role: "user",
+      content: "Branch A question",
+    })!;
+    const b = store().addNode(chat.rootId, {
+      role: "user",
+      content: "Branch B question",
+    })!;
+    return { rootId: chat.rootId, a, b };
+  };
+
+  const activeChat = () => store().chats[store().activeChatId];
+
+  it("addContextLink stores the link, dedupes, and journals it", () => {
+    const { a, b } = twoBranches();
+    store().addContextLink(b, a);
+    store().addContextLink(b, a); // duplicate — ignored
+    expect(activeChat().nodes[b].contextNodeIds).toEqual([a]);
+    const entries = activeChat().journalEntries.filter(
+      (e) => e.type === "context-link",
+    );
+    expect(entries).toHaveLength(1);
+  });
+
+  it("ignores self-links and unknown sources", () => {
+    const { a, b } = twoBranches();
+    store().addContextLink(b, b);
+    store().addContextLink(b, "no-such-node");
+    expect(activeChat().nodes[b].contextNodeIds).toBeUndefined();
+    void a;
+  });
+
+  it("removeContextLink clears the link (and drops the empty array)", () => {
+    const { a, b } = twoBranches();
+    store().addContextLink(b, a);
+    store().removeContextLink(b, a);
+    expect(activeChat().nodes[b].contextNodeIds).toBeUndefined();
+    // Removing again is a no-op (no extra journal entry).
+    const before = activeChat().journalEntries.length;
+    store().removeContextLink(b, a);
+    expect(activeChat().journalEntries.length).toBe(before);
+  });
+});
+
+describe("buildLinkedContextBlocks", () => {
+  type N = Parameters<typeof buildLinkedContextBlocks>[0][string];
+  const node = (id: string, parentId: string | null, init?: Partial<N>): N => ({
+    id,
+    parentId,
+    role: "user",
+    content: `content of ${id}`,
+    childrenIds: [],
+    createdAt: 0,
+    ...init,
+  });
+  const toMap = (ns: N[]) => Object.fromEntries(ns.map((n) => [n.id, n]));
+
+  it("emits a block for a cross-branch link, with the question for assistant sources", () => {
+    const nodes = toMap([
+      node("root", null, { role: "system" }),
+      node("qa", "root", { content: "What about temples?" }),
+      node("ra", "qa", {
+        role: "assistant",
+        content: "Temples answer",
+        branchLabel: "Temples",
+      }),
+      node("qb", "root", { contextNodeIds: ["ra"] }),
+    ]);
+    const blocks = buildLinkedContextBlocks(nodes, "qb");
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0].source_node_id).toBe("ra");
+    expect(blocks[0].source_label).toBe("Temples");
+    // Parent user question rides along, then the linked reply.
+    expect(blocks[0].messages.map((m) => m.role)).toEqual([
+      "user",
+      "assistant",
+    ]);
+    expect(blocks[0].messages[1].content).toBe("Temples answer");
+  });
+
+  it("skips sources already on the path, loading/system/empty sources", () => {
+    const nodes = toMap([
+      node("root", null, { role: "system" }),
+      node("q1", "root"),
+      node("r1", "q1", { role: "assistant", content: "first answer" }),
+      // q2 links its own ancestor (already in history), a loading node,
+      // and the system root — all skipped.
+      node("loading", "root", { role: "assistant", isLoading: true }),
+      node("q2", "r1", { contextNodeIds: ["r1", "loading", "root"] }),
+    ]);
+    expect(buildLinkedContextBlocks(nodes, "q2")).toHaveLength(0);
+  });
+
+  it("dedupes links gathered along the path and caps at the backend limit", () => {
+    const sources = Array.from({ length: 6 }, (_, i) =>
+      node(`s${i}`, "root", { role: "assistant", content: `answer ${i}` }),
+    );
+    const nodes = toMap([
+      node("root", null, { role: "system" }),
+      ...sources,
+      node("q1", "root", { contextNodeIds: ["s0", "s1"] }),
+      node("r1", "q1", { role: "assistant", content: "r1" }),
+      node("q2", "r1", {
+        contextNodeIds: ["s0", "s2", "s3", "s4", "s5"], // s0 repeats
+      }),
+    ]);
+    const blocks = buildLinkedContextBlocks(nodes, "q2");
+    expect(blocks.map((b) => b.source_node_id)).toEqual([
+      "s0",
+      "s1",
+      "s2",
+      "s3",
+    ]);
   });
 });

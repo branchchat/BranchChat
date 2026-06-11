@@ -1,13 +1,15 @@
-// Tags + comments footer for a canvas node.
+// Tags + comments for a canvas node.
 //
 // Lets a user organize an exploration without spending quota (the product's
-// "tag/comment nodes" capability). One bottom row: an optional `action` slot
-// (ChatNode passes "Show more") on the left, tags + add-affordances pushed to
-// the right; existing comments list below the row. Add-affordances reveal on
-// node hover so idle nodes stay clean. Everything is `nodrag` + stops
-// propagation so typing/clicking doesn't pan the canvas or re-trigger node
-// selection. Rendered inline (no popover) to avoid portal/z-index issues
-// inside a React Flow node.
+// "tag/comment nodes" capability). Existing tag chips render in the node
+// HEADER (top right, via the exported NodeTags); the footer is one bottom
+// row with an optional `action` slot (ChatNode passes "Show more") on the
+// left and the add-tag/add-comment affordances pushed to the right, with
+// existing comments listed below. Add-affordances reveal on node hover so
+// idle nodes stay clean. Everything is `nodrag` + stops propagation so
+// typing/clicking doesn't pan the canvas or re-trigger node selection.
+// Rendered inline (no popover) to avoid portal/z-index issues inside a
+// React Flow node.
 
 import { useState, type KeyboardEvent, type ReactNode } from "react";
 import { MessageSquarePlus, Tag, X } from "lucide-react";
@@ -17,6 +19,38 @@ import { cn } from "@/lib/utils";
 import { useChatStore } from "@/store/chatStore";
 import type { ChatNode } from "@/types/chat";
 
+// The node's tag chips (with remove buttons) — rendered by ChatNode in the
+// card header so tags sit top-right on the role-badge line.
+export function NodeTags({ node }: { node: ChatNode }) {
+  const removeTag = useChatStore((s) => s.removeTag);
+  const tags = node.tags ?? [];
+  if (tags.length === 0) return null;
+  return (
+    <>
+      {tags.map((tag) => (
+        <Badge
+          key={tag}
+          variant="secondary"
+          className="nodrag gap-1 py-0 pr-1 pl-1.5 text-[10px] font-normal"
+        >
+          #{tag}
+          <button
+            type="button"
+            aria-label={`Remove tag ${tag}`}
+            className="rounded-sm opacity-50 transition-opacity hover:opacity-100"
+            onClick={(e) => {
+              e.stopPropagation();
+              removeTag(node.id, tag);
+            }}
+          >
+            <X className="size-2.5" />
+          </button>
+        </Badge>
+      ))}
+    </>
+  );
+}
+
 export function NodeAnnotations({
   node,
   action,
@@ -25,13 +59,13 @@ export function NodeAnnotations({
   action?: ReactNode;
 }) {
   const addTag = useChatStore((s) => s.addTag);
-  const removeTag = useChatStore((s) => s.removeTag);
   const addComment = useChatStore((s) => s.addComment);
   const removeComment = useChatStore((s) => s.removeComment);
 
-  const tags = node.tags ?? [];
+  // Tag chips render in the node header (NodeTags); only comments keep the
+  // footer permanently visible.
   const comments = node.comments ?? [];
-  const hasContent = tags.length > 0 || comments.length > 0;
+  const hasContent = comments.length > 0;
 
   const [tagDraft, setTagDraft] = useState("");
   const [addingTag, setAddingTag] = useState(false);
@@ -90,24 +124,6 @@ export function NodeAnnotations({
             action && affordancesIdle && hoverReveal,
           )}
         >
-          {tags.map((tag) => (
-            <Badge
-              key={tag}
-              variant="secondary"
-              className="group/tag gap-1 py-0 pr-1 pl-1.5 text-[10px] font-normal"
-            >
-              #{tag}
-              <button
-                type="button"
-                aria-label={`Remove tag ${tag}`}
-                className="rounded-sm opacity-50 transition-opacity hover:opacity-100"
-                onClick={() => removeTag(node.id, tag)}
-              >
-                <X className="size-2.5" />
-              </button>
-            </Badge>
-          ))}
-
           {addingTag ? (
             <input
               autoFocus

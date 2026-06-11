@@ -17,6 +17,7 @@ import {
   isBackendConfigured,
   requestChatReply,
   type AttachmentPayload,
+  type LinkedContextBlock,
 } from "@/lib/api";
 import { useAuthStore } from "@/store/authStore";
 import { buildDemoChat } from "@/lib/demoChat";
@@ -176,6 +177,74 @@ export function buildHistoryForNode(
     out.unshift(recent[i]);
   }
   return out;
+}
+
+// Backend trims to 4 blocks server-side (MAX_LINKED_CONTEXT_BLOCKS); mirror
+// the cap here so what the user "linked" is what actually reaches the model.
+export const MAX_LINKED_CONTEXT_BLOCKS = 4;
+
+// Nearest branch label walking up from `id` (the label lives on the node that
+// STARTS a branch); undefined when the path back to root is unlabeled.
+function nearestBranchLabel(
+  nodes: Record<string, ChatNode>,
+  id: string,
+): string | undefined {
+  let current: string | null = id;
+  const guard = new Set<string>();
+  while (current && nodes[current] && !guard.has(current)) {
+    guard.add(current);
+    const label = nodes[current].branchLabel;
+    if (label) return label;
+    current = nodes[current].parentId;
+  }
+  return undefined;
+}
+
+// linked_context payload for a send whose user message is `userId`: walk the
+// root→user path, gather each node's contextNodeIds in path order (deduped),
+// and emit a block per source. Sources already ON the path are skipped (their
+// text is in `history`); an assistant source brings its parent user message
+// along so the model sees the question that produced it. Exported for tests.
+export function buildLinkedContextBlocks(
+  nodes: Record<string, ChatNode>,
+  userId: string,
+): LinkedContextBlock[] {
+  const path: ChatNode[] = [];
+  let current: string | null = userId;
+  const guard = new Set<string>();
+  while (current && nodes[current] && !guard.has(current)) {
+    guard.add(current);
+    path.push(nodes[current]);
+    current = nodes[current].parentId;
+  }
+  path.reverse(); // root → user
+
+  const pathIds = new Set(path.map((n) => n.id));
+  const blocks: LinkedContextBlock[] = [];
+  const seen = new Set<string>();
+  for (const node of path) {
+    for (const srcId of node.contextNodeIds ?? []) {
+      if (seen.has(srcId) || pathIds.has(srcId)) continue;
+      seen.add(srcId);
+      const src = nodes[srcId];
+      if (!src || src.isLoading || !src.content || src.role === "system") {
+        continue;
+      }
+      const messages: ProviderMessage[] = [];
+      const parent = src.parentId ? nodes[src.parentId] : undefined;
+      if (src.role === "assistant" && parent?.role === "user" && parent.content) {
+        messages.push({ role: "user", content: parent.content });
+      }
+      messages.push({ role: src.role, content: src.content });
+      blocks.push({
+        source_node_id: srcId,
+        source_label: nearestBranchLabel(nodes, srcId),
+        messages,
+      });
+      if (blocks.length >= MAX_LINKED_CONTEXT_BLOCKS) return blocks;
+    }
+  }
+  return blocks;
 }
 
 // Placeholder for the real provider call. Deterministic, references context.
@@ -402,6 +471,13 @@ export interface ChatStoreState {
   addComment: (nodeId: string, content: string) => void;
   removeComment: (nodeId: string, commentId: string) => void;
 
+  // --- cross-branch context links ---
+  // Link `sourceNodeId`'s exchange into the branch containing `nodeId`: every
+  // later send on a path through `nodeId` includes the source as a
+  // linked_context block. Deduped; self-links and unknown ids are no-ops.
+  addContextLink: (nodeId: string, sourceNodeId: string) => void;
+  removeContextLink: (nodeId: string, sourceNodeId: string) => void;
+
   // Import a conversation from a session-export JSON string: validates +
   // normalizes it (see sessionTransfer), assigns a fresh chat id, and switches
   // to it. Returns the new chat id; throws Error (user-facing message) on a
@@ -505,7 +581,9 @@ export const useChatStore = create<ChatStoreState>()(
                 node_id: assistantId,
                 message,
                 history,
-                linked_context: [],
+                // Cross-branch links anywhere on this path pull the linked
+                // exchanges into the system prompt (backend formats them).
+                linked_context: buildLinkedContextBlocks(chat.nodes, userId),
                 coding_mode: codingMode,
                 attachments,
                 model: branchModel?.model,
@@ -895,6 +973,49 @@ export const useChatStore = create<ChatStoreState>()(
             );
             return { comments: comments.length ? comments : undefined };
           }),
+
+        addContextLink: (nodeId, sourceNodeId) => {
+          const chat = get().chats[get().activeChatId];
+          const source = chat?.nodes[sourceNodeId];
+          if (!source || nodeId === sourceNodeId) return;
+          const label =
+            source.branchLabel ??
+            (source.content.length > 40
+              ? `${source.content.slice(0, 40)}…`
+              : source.content);
+          patchActiveNode(
+            nodeId,
+            (node) =>
+              (node.contextNodeIds ?? []).includes(sourceNodeId)
+                ? null
+                : {
+                    contextNodeIds: [
+                      ...(node.contextNodeIds ?? []),
+                      sourceNodeId,
+                    ],
+                  },
+            {
+              type: "context-link",
+              message: `Linked context from "${label}"`,
+              nodeId,
+            },
+          );
+        },
+
+        removeContextLink: (nodeId, sourceNodeId) =>
+          patchActiveNode(
+            nodeId,
+            (node) => {
+              const links = (node.contextNodeIds ?? []).filter(
+                (id) => id !== sourceNodeId,
+              );
+              if (links.length === (node.contextNodeIds ?? []).length) {
+                return null;
+              }
+              return { contextNodeIds: links.length ? links : undefined };
+            },
+            { type: "context-link", message: "Removed a context link", nodeId },
+          ),
 
         importChat: (text) => {
           // parseSession throws a user-facing Error on bad input; let it

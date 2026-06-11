@@ -57,9 +57,16 @@ test("long replies clamp on the canvas but open in full via Show more", async ({
   await page.getByRole("button", { name: "Decline" }).click();
   await page.getByRole("button", { name: "Load demo conversation" }).click();
 
-  // The demo's day-split reply is longer than the 6-line clamp, so its node
-  // must offer "Show more"…
-  const showMore = page.getByRole("button", { name: "Show more" }).first();
+  // Center the long day-split reply first (search pans to it at zoom 1 —
+  // clicking tiny fit-view-zoomed targets is flaky).
+  await page.getByPlaceholder("Search all chats…").fill("Higashiyama");
+  await page.locator("nav button", { hasText: "Higashiyama" }).first().click();
+  await page.waitForTimeout(600); // let the pan settle
+
+  // That reply is longer than the canvas clamp, so its node must offer
+  // "Show more"…
+  const node = page.locator(".react-flow__node", { hasText: "Higashiyama" });
+  const showMore = node.getByRole("button", { name: "Show more" });
   await expect(showMore).toBeVisible();
   await showMore.click();
 
@@ -99,4 +106,51 @@ test("nodes can be dragged and keep their new position", async ({ page }) => {
   if (!after) return;
   expect(Math.abs(after.x - before.x)).toBeGreaterThan(100);
   expect(Math.abs(after.y - before.y)).toBeGreaterThan(50);
+});
+
+test("dragging between side ports creates a context link; clicking the edge removes it", async ({
+  page,
+}) => {
+  await page.goto("/app");
+  await page.getByRole("button", { name: "Decline" }).click();
+  await page.getByRole("button", { name: "Load demo conversation" }).click();
+
+  // Center one of the demo's two sibling branch nodes at zoom 1; its sibling
+  // sits one layout stride to the right, still inside the viewport. The side
+  // ports are ~10px dots — at fit-view zoom they'd be sub-4px drag targets.
+  await page.getByPlaceholder("Search all chats…").fill("Focus on temples");
+  await page
+    .locator("nav button", { hasText: "Focus on temples" })
+    .first()
+    .click();
+  await page.waitForTimeout(600); // let the pan settle
+
+  const source = page.locator(".react-flow__node", {
+    hasText: "Focus on temples and gardens.",
+  });
+  const target = page.locator(".react-flow__node", {
+    hasText: "food and markets.",
+  });
+  const sBox = await source.boundingBox();
+  const tBox = await target.boundingBox();
+  expect(sBox).not.toBeNull();
+  expect(tBox).not.toBeNull();
+  if (!sBox || !tBox) return;
+
+  // Drag from the source's RIGHT port to the target's LEFT port (ports sit
+  // centered on the node borders).
+  await page.mouse.move(sBox.x + sBox.width, sBox.y + sBox.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(tBox.x, tBox.y + tBox.height / 2, { steps: 10 });
+  await page.mouse.up();
+
+  // Context links render as animated (dashed) edges; tree edges don't.
+  const linkEdge = page.locator(".react-flow__edge.animated");
+  await expect(linkEdge).toHaveCount(1);
+
+  // Clicking the dashed edge unlinks. force: Playwright can't compute
+  // visibility for the SVG <g> (stroke-only, no fill); the edge between
+  // same-row siblings is straight, so its bbox center lies on the stroke.
+  await linkEdge.click({ force: true });
+  await expect(linkEdge).toHaveCount(0);
 });

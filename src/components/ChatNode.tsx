@@ -19,7 +19,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Markdown } from "@/components/Markdown";
-import { NodeAnnotations } from "@/components/NodeAnnotations";
+import { NodeAnnotations, NodeTags } from "@/components/NodeAnnotations";
 import { modelLabel } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { NODE_WIDTH } from "@/lib/treeLayout";
@@ -118,23 +118,63 @@ const ChatNodeBody = memo(function ChatNodeBody({
           selected && "ring-2 ring-ring ring-offset-2 ring-offset-background",
         )}
       >
-        {/* Incoming edge from parent (root has no parent). */}
+        {/* Incoming edge from parent (root has no parent). Tree handles are
+            display-only — connections happen via the side context ports. */}
         {!isRoot && (
-          <Handle type="target" position={Position.Top} className="!bg-border" />
+          <Handle
+            type="target"
+            position={Position.Top}
+            isConnectable={false}
+            className="!bg-border"
+          />
+        )}
+
+        {/* Context-link ports: drag from the RIGHT port of any node to the
+            LEFT port of another to feed this exchange into that branch's
+            prompts (dashed edge; click the edge to unlink). The root system
+            node is UI copy, so it has no ports. */}
+        {!isRoot && !node.isLoading && (
+          <>
+            <Handle
+              id="ctx-in"
+              type="target"
+              position={Position.Left}
+              className="!size-2.5 !border-2 !border-background !bg-muted-foreground/70 opacity-40 transition-opacity group-hover/node:opacity-100"
+            >
+              <span className="sr-only">Link context into this branch</span>
+            </Handle>
+            <Handle
+              id="ctx-out"
+              type="source"
+              position={Position.Right}
+              className="!size-2.5 !border-2 !border-background !bg-muted-foreground/70 opacity-40 transition-opacity group-hover/node:opacity-100"
+            >
+              <span className="sr-only">
+                Drag to link this message into another branch
+              </span>
+            </Handle>
+          </>
         )}
 
         <CardHeader className="px-3">
-          <CardTitle className="flex items-center gap-2 text-xs font-medium">
+          <CardTitle className="flex flex-wrap items-center gap-2 text-xs font-medium">
             <Badge variant={ROLE_VARIANT[node.role]}>
               {ROLE_LABEL[node.role]}
             </Badge>
             {node.branchLabel && (
               <span className="text-muted-foreground">{node.branchLabel}</span>
             )}
-            {generatedBy && (
-              <Badge variant="outline" className="ml-auto font-normal">
-                {generatedBy}
-              </Badge>
+            {/* Top-right cluster: tags live up here (same line as the role),
+                keeping the footer row free for Show more + add-affordances. */}
+            {(!!node.tags?.length || generatedBy) && (
+              <span className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-1">
+                <NodeTags node={node} />
+                {generatedBy && (
+                  <Badge variant="outline" className="font-normal">
+                    {generatedBy}
+                  </Badge>
+                )}
+              </span>
             )}
           </CardTitle>
         </CardHeader>
@@ -218,8 +258,13 @@ const ChatNodeBody = memo(function ChatNodeBody({
             ))}
         </CardContent>
 
-        {/* Outgoing edge to children. */}
-        <Handle type="source" position={Position.Bottom} className="!bg-border" />
+        {/* Outgoing edge to children (display-only, see above). */}
+        <Handle
+          type="source"
+          position={Position.Bottom}
+          isConnectable={false}
+          className="!bg-border"
+        />
       </Card>
 
       {/* Hover action: branch from THIS node with a chosen model. Selects the

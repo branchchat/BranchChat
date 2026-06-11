@@ -299,6 +299,13 @@ capturing these trivial.
 
 ## Recently Completed
 
+- [x] **2026-06-11 canvas batch 2 (Roshaan).** **@Jayden — `Canvas.tsx`, `ChatNode.tsx`, `NodeAnnotations.tsx`, `chatStore.ts`, `treeLayout.ts`, `e2e/smoke.spec.ts` touched again (additive except node-footer layout).** What shipped:
+  - **Context linking is live** (the `linked_context` field you stubbed since the original contract — backend already formatted it, nothing was sending it). Drag from a node's RIGHT port to another node's LEFT port → the target's branch includes the source exchange in its prompts (assistant sources bring their parent question along). Dashed animated edge; click it to unlink. Store: `addContextLink`/`removeContextLink` on `contextNodeIds` + exported `buildLinkedContextBlocks` (skips on-path sources, dedupes, caps at the backend's 4). Tree top/bottom handles are now explicitly non-connectable.
+  - **Node layout**: tag chips moved to the card HEADER (top right, next to the model badge — new exported `NodeTags`); the footer is one row: Show more left, add-tag/add-comment affordances right, comments listed below. `Y_GAP` 220 → 300 (clamped nodes used to overlap their children).
+  - **Drag text-flash fixed for real**: Canvas now echoes React Flow's `dimensions` changes back onto the node objects (a controlled-flow requirement we were skipping — RF hides nodes it considers unmeasured, and the dragged node's object is replaced per frame). Also layered drag positions in a second memo pass + memoized the card body, so dragging re-renders almost nothing. The RF "#015 node not initialized" warning is gone.
+  - **Canvas refits on chat switch** (e.g. "Load demo conversation" used to keep the previous chat's pan/zoom, leaving the new tree off-screen — this was also making the e2e tests scroll-chase). Search-result opens still center themselves.
+  - 85 unit tests (+6) and 4 e2e (+1: real port-to-port drag creates a link, edge-click removes it), lint/build green.
+
 - [x] **2026-06-11 polish batch (Roshaan).** **@Jayden — heads-up: your high-risk files `chatStore.ts`, `Canvas.tsx`, `ChatNode.tsx`, `InputBar.tsx`, `api.ts`, `types/chat.ts` were all touched (additively) — diff this batch when you're back.** What shipped:
   - **Adaptive thinking for Claude** (backend): Opus 4.8 / Sonnet 4.6 now send `thinking: {type: "adaptive"}` — they were running with reasoning OFF (omission = disabled on Anthropic's API).
   - **Attachments**: paperclip in the composer; images (all providers) + PDFs (Gemini/Claude only — clean 422 elsewhere), 3 × ~1.4 MB caps both sides. Bytes ride the NEW message only and are NEVER persisted (memory-only map keyed by user node; the node stores name/type metadata for the chip). History stays text by design.
