@@ -7,11 +7,17 @@
 
 import { memo, useEffect, useRef, useState } from "react";
 import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
-import { BookOpen, Bot, Paperclip, RotateCcw } from "lucide-react";
+import { Bot, Maximize2, Paperclip, RotateCcw } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { NodeAnnotations } from "@/components/NodeAnnotations";
 import { modelLabel } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -45,14 +51,14 @@ function ChatNodeComponent({ data, selected }: NodeProps<ChatFlowNode>) {
   const retryAssistant = useChatStore((s) => s.retryAssistant);
   const selectNode = useChatStore((s) => s.selectNode);
   const openModelPicker = useChatStore((s) => s.openModelPicker);
-  const openFocusView = useChatStore((s) => s.openFocusView);
 
   // Long replies are clamped on the canvas (the layout's row height is
   // fixed, so a node can't grow in place without overlapping its children).
   // When the clamp actually cuts something off, offer "Show more", which
-  // opens the focused reading view at this node — full text, scrollable.
+  // expands this message into a large popup — full text, scrollable.
   const contentRef = useRef<HTMLParagraphElement>(null);
   const [clamped, setClamped] = useState(false);
+  const [expanded, setExpanded] = useState(false);
   useEffect(() => {
     const el = contentRef.current;
     setClamped(!!el && el.scrollHeight > el.clientHeight + 1);
@@ -128,11 +134,10 @@ function ChatNodeComponent({ data, selected }: NodeProps<ChatFlowNode>) {
                   className="nodrag mt-1 inline-flex cursor-pointer items-center gap-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
                   onClick={(e) => {
                     e.stopPropagation();
-                    selectNode(node.id);
-                    openFocusView();
+                    setExpanded(true);
                   }}
                 >
-                  <BookOpen className="size-3" />
+                  <Maximize2 className="size-3" />
                   Show more
                 </button>
               )}
@@ -199,6 +204,34 @@ function ChatNodeComponent({ data, selected }: NodeProps<ChatFlowNode>) {
           Branch with model
         </Button>
       )}
+
+      {/* "Show more": the message expanded into a big, scrollable popup. */}
+      <Dialog open={expanded} onOpenChange={setExpanded}>
+        <DialogContent className="flex max-h-[85vh] flex-col sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-sm">
+              <Badge variant={ROLE_VARIANT[node.role]}>
+                {ROLE_LABEL[node.role]}
+              </Badge>
+              {generatedBy && (
+                <span className="text-muted-foreground font-normal">
+                  {generatedBy}
+                </span>
+              )}
+              {node.branchLabel && (
+                <span className="text-muted-foreground font-normal">
+                  · {node.branchLabel}
+                </span>
+              )}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="min-h-0 overflow-y-auto pr-1">
+            <p className="text-sm leading-relaxed whitespace-pre-wrap">
+              {node.content}
+            </p>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

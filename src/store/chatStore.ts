@@ -360,6 +360,13 @@ export interface ChatStoreState {
 
   selectNode: (nodeId: string) => void;
 
+  // Persist a node's canvas position after a drag (overrides the tree
+  // layout's computed slot for that node from then on).
+  setNodePosition: (
+    nodeId: string,
+    position: { x: number; y: number },
+  ) => void;
+
   // Linear continuation: append a user message under `parentId` (defaults to
   // the selected node) and request an assistant reply. Attachments ride with
   // this message only (bytes go to the provider; the node keeps metadata).
@@ -699,6 +706,9 @@ export const useChatStore = create<ChatStoreState>()(
               },
             };
           }),
+
+        setNodePosition: (nodeId, position) =>
+          patchActiveNode(nodeId, () => ({ position })),
 
         addUserMessage: (message, parentId, opts) => {
           const text = message.trim();

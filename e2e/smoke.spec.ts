@@ -63,9 +63,40 @@ test("long replies clamp on the canvas but open in full via Show more", async ({
   await expect(showMore).toBeVisible();
   await showMore.click();
 
-  // …which opens the focused reading view with the FULL text (the canvas
+  // …which expands the message into a popup with the FULL text (the canvas
   // node only ever shows the first lines).
-  const reader = page.getByLabel("Focused reading view");
-  await expect(reader).toBeVisible();
-  await expect(reader).toContainText("food and markets?");
+  const dialog = page.getByRole("dialog");
+  await expect(dialog).toBeVisible();
+  await expect(dialog).toContainText("food and markets?");
+});
+
+test("nodes can be dragged and keep their new position", async ({ page }) => {
+  await page.goto("/app");
+  await page.getByRole("button", { name: "Decline" }).click();
+  await page.getByRole("button", { name: "Load demo conversation" }).click();
+
+  // Center the target node first (the demo tree extends past the viewport,
+  // and mouse events can't reach an off-screen node).
+  await page.getByPlaceholder("Search all chats…").fill("sake breweries");
+  await page.locator("nav button", { hasText: "sake breweries" }).first().click();
+  await page.waitForTimeout(600); // let the pan settle
+
+  const node = page.locator(".react-flow__node", { hasText: "Nishiki Market" });
+  const before = await node.boundingBox();
+  expect(before).not.toBeNull();
+  if (!before) return;
+
+  // Drag from the node's header area (the content has nodrag affordances).
+  const startX = before.x + before.width / 2;
+  const startY = before.y + 12;
+  await page.mouse.move(startX, startY);
+  await page.mouse.down();
+  await page.mouse.move(startX + 150, startY + 80, { steps: 8 });
+  await page.mouse.up();
+
+  const after = await node.boundingBox();
+  expect(after).not.toBeNull();
+  if (!after) return;
+  expect(Math.abs(after.x - before.x)).toBeGreaterThan(100);
+  expect(Math.abs(after.y - before.y)).toBeGreaterThan(50);
 });

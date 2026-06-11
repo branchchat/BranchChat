@@ -92,17 +92,17 @@ export function InputBar() {
       inherited.model)
     : null;
 
-  // "Replying to": prefer the MODEL that wrote an assistant reply over the
-  // generic role word ("Replying to Claude Opus 4.8" beats "assistant reply");
-  // the role label stays as the fallback for user/root nodes and stub replies.
+  // One name only: the model this exchange is happening with — the model
+  // that wrote the selected reply, else the branch's inherited model, else
+  // the role label (user/root nodes in stub mode, where no model is known).
   const replyingTo = selected
-    ? (selected.role === "assistant" && selected.provider && selected.model
+    ? ((selected.role === "assistant" && selected.provider && selected.model
         ? (modelLabel(selected.provider, selected.model) ?? selected.model)
-        : (ROLE_LABEL[selected.role] ?? selected.role))
+        : null) ??
+      inheritedLabel ??
+      ROLE_LABEL[selected.role] ??
+      selected.role)
     : null;
-  // The trailing "answers with X" only earns its place when it differs from
-  // the name already shown (a branch inheriting a different model override).
-  const showAnswersWith = !!inheritedLabel && inheritedLabel !== replyingTo;
 
   // Validate + read picked files into base64 payloads (client-side mirror of
   // the backend caps, so oversized picks fail before any upload).
@@ -187,16 +187,7 @@ export function InputBar() {
           {selected ? (
             <>
               Replying to{" "}
-              <span className="font-medium text-foreground">{replyingTo}</span>
-              {selected.branchLabel ? ` · ${selected.branchLabel}` : ""}
-              {showAnswersWith ? (
-                <>
-                  {" · answers with "}
-                  <span className="font-medium text-foreground">
-                    {inheritedLabel}
-                  </span>
-                </>
-              ) : null}{" "}
+              <span className="font-medium text-foreground">{replyingTo}</span>{" "}
               — Send continues this path, Branch starts an alternate.
             </>
           ) : (
