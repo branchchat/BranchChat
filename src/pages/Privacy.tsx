@@ -35,9 +35,12 @@ export function Privacy() {
           <li>
             <strong className="text-foreground">Conversations</strong> — the
             prompts and content you enter into the chat. Your conversation tree
-            is stored locally in your browser (BranchChat is local-first); when
-            you request an AI response, the relevant content is sent to our
-            backend and AI provider to generate a reply.
+            is stored locally in your browser; when you request an AI response,
+            the relevant content is sent to our backend and AI provider to
+            generate a reply. For signed-in users, chats are also backed up to
+            our servers so they follow you across devices — encrypted at rest,
+            so database access alone cannot read them. Deleting a chat in the
+            app deletes the server copy too.
           </li>
         </ul>
         <p>

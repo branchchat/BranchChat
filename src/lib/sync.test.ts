@@ -1,13 +1,14 @@
 // @vitest-environment jsdom
 //
-// Server-side sync engine: two-way pass with last-write-wins, and the store's
-// applySyncedChat upsert. The api module is mocked — these tests cover the
-// engine's decisions (what to pull, what to push, what to skip), not HTTP.
+// Server-side sync engine: two-way pass with last-write-wins, tombstone
+// reconciliation in both directions, and the store's applySyncedChat upsert.
+// The api module is mocked — these tests cover the engine's decisions (what
+// to pull, push, delete, and resurrect), not HTTP.
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { isSyncEnabled, setSyncEnabled, syncNow } from "@/lib/sync";
-import { addTombstone } from "@/lib/syncTombstones";
+import { syncNow } from "@/lib/sync";
+import { addTombstone, isTombstoned } from "@/lib/syncTombstones";
 import { useAuthStore } from "@/store/authStore";
 import { useChatStore } from "@/store/chatStore";
 import type { ChatSessionState } from "@/types/chat";
@@ -54,9 +55,6 @@ function envelopeFor(chat: ChatSessionState): Record<string, unknown> {
 beforeEach(() => {
   localStorage.clear();
   vi.clearAllMocks();
-  // Set the flag directly: setSyncEnabled(true) would fire its own syncNow()
-  // pass that interleaves with the test body.
-  localStorage.setItem("branchchat-sync-enabled", "1");
   useChatStore.setState({ chats: {}, activeChatId: "" });
   useAuthStore.setState({
     user: { email: "t@example.com", email_verified: true },
@@ -125,9 +123,9 @@ describe("syncNow", () => {
     expect(api.pushSyncedChat).not.toHaveBeenCalled();
   });
 
-  it("deletes the server copy of a tombstoned chat and never re-pulls it", async () => {
-    // The chat is gone locally and tombstoned; the server still has it.
-    addTombstone("chat_x");
+  it("tombstones the server copy of a locally-deleted chat and never re-pulls it", async () => {
+    // The chat is gone locally and tombstoned; the server still has it live.
+    addTombstone("chat_x", 100);
     api.fetchSyncManifest.mockResolvedValue([
       { chat_id: "chat_x", title: "deleted", updated_at: 100 },
     ]);
@@ -140,24 +138,96 @@ describe("syncNow", () => {
     expect(useChatStore.getState().chats.chat_x).toBeUndefined();
   });
 
-  it("does nothing when disabled or signed out", async () => {
-    localStorage.setItem("branchchat-sync-enabled", "0");
-    await syncNow();
-    expect(api.fetchSyncManifest).not.toHaveBeenCalled();
+  it("retires the tombstone and pulls when another device resurrected with newer content", async () => {
+    addTombstone("chat_x", 100);
+    const reborn = makeChat("chat_x", "edited elsewhere", 250);
+    api.fetchSyncManifest.mockResolvedValue([
+      { chat_id: "chat_x", title: "edited elsewhere", updated_at: 250 },
+    ]);
+    api.fetchSyncedChat.mockResolvedValue({
+      chat_id: "chat_x",
+      title: "edited elsewhere",
+      updated_at: 250,
+      payload: envelopeFor(reborn),
+    });
 
-    localStorage.setItem("branchchat-sync-enabled", "1");
+    await syncNow();
+
+    // The resurrection wins: no re-delete, tombstone gone, chat back.
+    expect(api.deleteSyncedChat).not.toHaveBeenCalled();
+    expect(isTombstoned("chat_x")).toBe(false);
+    expect(useChatStore.getState().chats.chat_x.title).toBe("edited elsewhere");
+  });
+
+  it("drops the local copy when the manifest carries a server tombstone", async () => {
+    useChatStore.setState({
+      chats: {
+        chat_dead: makeChat("chat_dead", "deleted on device A", 80),
+        chat_live: makeChat("chat_live", "keep me", 10),
+      },
+      activeChatId: "chat_live",
+    });
+    api.fetchSyncManifest.mockResolvedValue([
+      { chat_id: "chat_dead", title: null, updated_at: 100, deleted: true },
+      { chat_id: "chat_live", title: "keep me", updated_at: 10 },
+    ]);
+
+    await syncNow();
+
+    const chats = useChatStore.getState().chats;
+    expect(chats.chat_dead).toBeUndefined();
+    expect(chats.chat_live).toBeDefined();
+    // The dead chat must not be pushed back, pulled, or re-deleted.
+    expect(api.pushSyncedChat).not.toHaveBeenCalled();
+    expect(api.fetchSyncedChat).not.toHaveBeenCalled();
+  });
+
+  it("resurrect-pushes a local copy that is strictly newer than the server tombstone", async () => {
+    useChatStore.setState({
+      chats: { chat_r: makeChat("chat_r", "edited after the delete", 150) },
+      activeChatId: "chat_r",
+    });
+    api.fetchSyncManifest.mockResolvedValue([
+      { chat_id: "chat_r", title: null, updated_at: 100, deleted: true },
+    ]);
+
+    await syncNow();
+
+    // Local edits win over the tombstone (LWW): kept locally and pushed.
+    expect(useChatStore.getState().chats.chat_r).toBeDefined();
+    expect(api.pushSyncedChat).toHaveBeenCalledWith(
+      "chat_r",
+      expect.anything(),
+      150,
+      "edited after the delete",
+    );
+  });
+
+  it("drops the local copy when a push answers 'deleted' (raced a delete)", async () => {
+    useChatStore.setState({
+      chats: {
+        chat_raced: makeChat("chat_raced", "raced", 90),
+        chat_other: makeChat("chat_other", "other", 10),
+      },
+      activeChatId: "chat_other",
+    });
+    api.fetchSyncManifest.mockResolvedValue([]);
+    api.pushSyncedChat.mockImplementation(async (id: string) =>
+      id === "chat_raced"
+        ? { status: "deleted", updated_at: 100 }
+        : { status: "stored", updated_at: 0 },
+    );
+
+    await syncNow();
+
+    expect(useChatStore.getState().chats.chat_raced).toBeUndefined();
+    expect(useChatStore.getState().chats.chat_other).toBeDefined();
+  });
+
+  it("does nothing when signed out", async () => {
     useAuthStore.setState({ user: null } as never);
     await syncNow();
     expect(api.fetchSyncManifest).not.toHaveBeenCalled();
-  });
-});
-
-describe("setSyncEnabled / isSyncEnabled", () => {
-  it("persists the flag", () => {
-    setSyncEnabled(false);
-    expect(isSyncEnabled()).toBe(false);
-    setSyncEnabled(true);
-    expect(isSyncEnabled()).toBe(true);
   });
 });
 

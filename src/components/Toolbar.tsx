@@ -42,7 +42,7 @@ import {
   storageUsageChars,
   STORAGE_WARN_CHARS,
 } from "@/lib/sessionTransfer";
-import { SyncToggle } from "@/components/SyncToggle";
+import { SyncStatus } from "@/components/SyncStatus";
 import { DEMO_CHATS } from "@/lib/demoChat";
 import { useChatStore } from "@/store/chatStore";
 import type { ChatSessionState, Workspace } from "@/types/chat";
@@ -311,7 +311,7 @@ export function Toolbar({ onNavigate }: { onNavigate?: () => void } = {}) {
       </nav>
 
       <div className="space-y-1 border-t p-2">
-        <SyncToggle />
+        <SyncStatus />
         {/* Sample conversations: the intro tree, a deep-research workflow
             (model branches + a context link), and an advanced debugging
             session (two models, two competing fixes). */}

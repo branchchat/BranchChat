@@ -123,7 +123,8 @@ export function Beta() {
 
         <p className="mx-auto mt-14 flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
           <Check className="size-3.5" />
-          Your chats stay in your browser — local-first by default.
+          Local-first, with encrypted backup — your synced chats are sealed
+          before they touch our database.
         </p>
       </main>
     </div>

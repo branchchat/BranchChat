@@ -429,6 +429,9 @@ export interface SyncManifestEntry {
   chat_id: string;
   title: string | null;
   updated_at: number;
+  // True = a delete tombstone: drop the local copy unless it's strictly
+  // newer (in which case pushing it resurrects the chat).
+  deleted?: boolean;
 }
 
 export interface SyncedChatPayload {
@@ -485,21 +488,23 @@ export function fetchSyncedChat(chatId: string): Promise<SyncedChatPayload> {
   return syncFetch(`/api/sync/chats/${encodeURIComponent(chatId)}`);
 }
 
-// PUT /api/sync/chats/{id} → "stored", or "stale" when the server copy is
-// newer (the caller should pull instead).
+// PUT /api/sync/chats/{id} → "stored"; "stale" when the server copy is newer
+// (the caller should pull instead); "deleted" when the chat is tombstoned and
+// this push wasn't strictly newer (the caller should drop its local copy).
 export function pushSyncedChat(
   chatId: string,
   payload: Record<string, unknown>,
   updatedAt: number,
   title?: string,
-): Promise<{ status: "stored" | "stale"; updated_at: number }> {
+): Promise<{ status: "stored" | "stale" | "deleted"; updated_at: number }> {
   return syncFetch(`/api/sync/chats/${encodeURIComponent(chatId)}`, {
     method: "PUT",
     body: { payload, updated_at: updatedAt, title: title ?? null },
   });
 }
 
-// DELETE /api/sync/chats/{id} → remove the server copy (local copy untouched).
+// DELETE /api/sync/chats/{id} → tombstone the server copy (local untouched).
+// The tombstone is what stops a stale offline device re-pushing the chat.
 export function deleteSyncedChat(chatId: string): Promise<void> {
   return syncFetch(`/api/sync/chats/${encodeURIComponent(chatId)}`, {
     method: "DELETE",

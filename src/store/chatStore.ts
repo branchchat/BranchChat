@@ -730,11 +730,12 @@ export const useChatStore = create<ChatStoreState>()(
         },
 
         deleteChat: (chatId) => {
-          if (!get().chats[chatId]) return;
-          // Remember the deliberate delete so sync removes the server copy and
-          // never restores it. A wiped browser has no tombstone, so its restore
-          // on next pull still works.
-          addTombstone(chatId);
+          const doomed = get().chats[chatId];
+          if (!doomed) return;
+          // Remember the deliberate delete (with the version it superseded) so
+          // sync tombstones the server copy and never restores it. A wiped
+          // browser has no tombstone, so its restore on next pull still works.
+          addTombstone(chatId, doomed.updatedAt);
           set((state) => {
             if (!state.chats[chatId]) return {};
             const chats = { ...state.chats };

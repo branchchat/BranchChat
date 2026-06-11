@@ -1,19 +1,24 @@
-// Server-side sync engine (optional, signed-in users only).
+// Server-side sync engine (always on for signed-in users).
 //
 // The app stays local-first: localStorage is the working copy; the backend's
-// /api/sync is a per-chat backup/sync target the user opts into (the toggle in
-// the Toolbar footer persists to its own localStorage key, NOT the chat
-// store). Each chat syncs as the session-export envelope, keyed by its local
-// chat id, with last-write-wins on the chat's own updatedAt:
+// /api/sync is a per-chat backup/sync target that runs automatically whenever
+// a signed-in user has a configured backend — there is deliberately no off
+// switch, so nobody loses chats to a toggle they forgot. Each chat syncs as
+// the session-export envelope, keyed by its local chat id, with
+// last-write-wins on the chat's own updatedAt:
 //
 //   pull: server copy newer (or missing locally)  → applySyncedChat
 //   push: local copy newer (or missing on server) → PUT
 //
-// A DELIBERATE delete is honored: chatStore records a tombstone (see
-// syncTombstones), and this engine then deletes the server copy and never
-// re-pulls that id. A WIPED browser has no tombstones, so its chats still
-// restore on the next pull. Errors are swallowed into the status so an
-// offline backend never breaks the app.
+// Deletes are honored end to end. Deleting a chat records a LOCAL tombstone
+// (lib/syncTombstones); this engine then tombstones the SERVER copy, and the
+// server's manifest broadcasts the deletion so every other device drops its
+// local copy too. A stale offline device re-pushing gets "deleted" back and
+// drops its copy; only a strictly NEWER version (real edits made elsewhere)
+// resurrects the chat — in which case the deleting device retires its
+// tombstone and pulls it back, instead of ping-ponging deletes. A wiped
+// browser has no tombstones, so restore-on-pull still works. Errors are
+// swallowed into the status so an offline backend never breaks the app.
 
 import {
   deleteSyncedChat,
@@ -23,12 +28,11 @@ import {
   pushSyncedChat,
 } from "@/lib/api";
 import { EXPORT_VERSION, type SessionExport } from "@/lib/sessionTransfer";
-import { getTombstones } from "@/lib/syncTombstones";
+import { getTombstones, removeTombstone } from "@/lib/syncTombstones";
 import { useAuthStore } from "@/store/authStore";
 import { useChatStore } from "@/store/chatStore";
 import type { ChatSessionState } from "@/types/chat";
 
-const ENABLED_KEY = "branchchat-sync-enabled";
 const DEBOUNCE_MS = 3_000;
 
 export type SyncState = "idle" | "syncing" | "synced" | "error";
@@ -54,31 +58,10 @@ export function getSyncStatus(): SyncStatus {
   return status;
 }
 
-// Subscribe to status changes (returns unsubscribe) — used by the toggle UI.
+// Subscribe to status changes (returns unsubscribe) — used by the status row.
 export function onSyncStatus(listener: Listener): () => void {
   listeners.add(listener);
   return () => listeners.delete(listener);
-}
-
-export function isSyncEnabled(): boolean {
-  try {
-    return localStorage.getItem(ENABLED_KEY) === "1";
-  } catch {
-    return false;
-  }
-}
-
-export function setSyncEnabled(enabled: boolean): void {
-  try {
-    localStorage.setItem(ENABLED_KEY, enabled ? "1" : "0");
-  } catch {
-    // Storage unavailable — the toggle just won't persist.
-  }
-  if (enabled) {
-    void syncNow();
-  } else {
-    setStatus({ state: "idle" });
-  }
 }
 
 function envelope(chat: ChatSessionState): Record<string, unknown> {
@@ -93,51 +76,78 @@ function envelope(chat: ChatSessionState): Record<string, unknown> {
 
 let syncing = false;
 
-// One full two-way pass. Safe to call any time: no-ops unless enabled, signed
-// in, and a backend is configured; concurrent calls collapse into one.
+// One full two-way pass. Safe to call any time: no-ops unless signed in with
+// a backend configured; concurrent calls collapse into one.
 export async function syncNow(): Promise<void> {
-  if (!isSyncEnabled() || !isBackendConfigured()) return;
+  if (!isBackendConfigured()) return;
   if (!useAuthStore.getState().user) return;
   if (syncing) return;
   syncing = true;
   setStatus({ ...status, state: "syncing" });
   try {
     const manifest = await fetchSyncManifest();
-    const remote = new Map(manifest.map((m) => [m.chat_id, m.updated_at]));
     const tombstones = getTombstones();
-    const { chats, applySyncedChat } = useChatStore.getState();
+    const store = useChatStore.getState();
 
-    // Honor deliberate deletes: remove the server copy of anything tombstoned
-    // here, and drop it from `remote` so the push pass doesn't re-create it.
-    // Best-effort — a failed delete just retries on the next pass.
-    for (const id of Object.keys(tombstones)) {
-      if (remote.has(id)) {
+    // The version map the push pass compares against. Tombstoned server
+    // entries stay in it: a local copy strictly newer than the deleted
+    // version SHOULD push (that's the legitimate resurrect path).
+    const remote = new Map(manifest.map((m) => [m.chat_id, m.updated_at]));
+
+    // 1. Our deletes → the server. For every locally-tombstoned id the server
+    // still considers alive: if the server version is strictly newer than
+    // what we deleted, another device resurrected it with real edits — honor
+    // that and retire our tombstone (the pull below brings it back).
+    // Otherwise tombstone the server copy. Best-effort: a failed call just
+    // retries next pass.
+    for (const [id, tomb] of Object.entries(tombstones)) {
+      const entry = manifest.find((m) => m.chat_id === id);
+      if (!entry || entry.deleted) continue; // unknown or already tombstoned
+      if (entry.updated_at > tomb.v) {
+        removeTombstone(id);
+        delete tombstones[id];
+      } else {
         try {
           await deleteSyncedChat(id);
         } catch {
-          // Leave it on the server; the tombstone retries next pass.
+          // Leave it; the local tombstone retries next pass.
         }
         remote.delete(id);
       }
     }
 
-    // Pull everything the server has newer (or that we don't have at all) —
-    // but never resurrect a chat the user deleted.
+    // 2. Server deletes → us. A tombstoned manifest entry means some device
+    // deliberately deleted this chat: drop our copy unless ours is strictly
+    // newer (then the push pass resurrects it instead).
     for (const m of manifest) {
-      if (tombstones[m.chat_id]) continue;
-      const local = chats[m.chat_id];
+      if (!m.deleted) continue;
+      const local = store.chats[m.chat_id];
+      if (local && local.updatedAt <= m.updated_at) {
+        // deleteChat also writes a local tombstone — harmless here, and it
+        // keeps the id from being re-pushed before this pass finishes.
+        useChatStore.getState().deleteChat(m.chat_id);
+      }
+    }
+
+    // 3. Pull everything the server has newer (or that we don't have at all)
+    // — skipping tombstones in either direction.
+    for (const m of manifest) {
+      if (m.deleted || tombstones[m.chat_id]) continue;
+      const local = useChatStore.getState().chats[m.chat_id];
       if (!local || local.updatedAt < m.updated_at) {
         const synced = await fetchSyncedChat(m.chat_id);
         try {
-          applySyncedChat(m.chat_id, synced.payload, synced.updated_at);
+          useChatStore
+            .getState()
+            .applySyncedChat(m.chat_id, synced.payload, synced.updated_at);
         } catch {
           // A malformed server blob shouldn't kill the rest of the pass.
         }
       }
     }
 
-    // Push everything local that's newer (or that the server doesn't have).
-    // Re-read state: pulls above may have replaced chats.
+    // 4. Push everything local that's newer (or that the server doesn't
+    // have). Re-read state: the passes above may have changed it.
     const current = useChatStore.getState().chats;
     for (const chat of Object.values(current)) {
       if (tombstones[chat.id]) continue;
@@ -149,10 +159,11 @@ export async function syncNow(): Promise<void> {
           chat.updatedAt,
           chat.title,
         );
-        if (res.status === "stale") {
-          // Raced a newer write from another device; pick it up next pass.
-          continue;
+        if (res.status === "deleted") {
+          // Raced a delete from another device and lost: drop our copy too.
+          useChatStore.getState().deleteChat(chat.id);
         }
+        // "stale": raced a newer write; pick it up next pass.
       }
     }
 
@@ -179,7 +190,7 @@ export function startSyncLoop(): void {
   let timer: ReturnType<typeof setTimeout> | undefined;
   useChatStore.subscribe((state, prev) => {
     if (state.chats === prev.chats) return; // transient/UI-only change
-    if (!isSyncEnabled() || !useAuthStore.getState().user) return;
+    if (!useAuthStore.getState().user) return;
     clearTimeout(timer);
     timer = setTimeout(() => void syncNow(), DEBOUNCE_MS);
   });

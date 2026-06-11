@@ -29,7 +29,7 @@ const COPY: Record<
 > = {
   signin: {
     title: "Sign in",
-    description: "Welcome back. Your chats stay in this browser either way.",
+    description: "Welcome back. Your chats sync to your account and follow you across devices.",
     submit: "Sign in",
     busy: "Signing in…",
   },
