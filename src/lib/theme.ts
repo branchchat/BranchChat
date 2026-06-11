@@ -27,9 +27,12 @@ function readStored(): Theme | null {
   }
 }
 
-/** What the OS/browser prefers when the user hasn't chosen explicitly. */
+/** What the OS/browser prefers when the user hasn't chosen explicitly.
+ * Guards `matchMedia` — it's absent in some environments (jsdom, older
+ * browsers), where we fall back to light. */
 export function systemTheme(): Theme {
   return typeof window !== "undefined" &&
+    typeof window.matchMedia === "function" &&
     window.matchMedia("(prefers-color-scheme: dark)").matches
     ? "dark"
     : "light";

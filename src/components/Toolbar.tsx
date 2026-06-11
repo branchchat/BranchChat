@@ -29,6 +29,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { ThemeToggleRow } from "@/components/ThemeToggle";
 import {
   cn,
   downloadTextFile,
@@ -376,6 +377,8 @@ export function Toolbar({ onNavigate }: { onNavigate?: () => void } = {}) {
             Local storage is getting large — export chats you want to keep.
           </p>
         )}
+
+        <ThemeToggleRow />
       </div>
 
       <Dialog
