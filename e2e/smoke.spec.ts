@@ -49,3 +49,23 @@ test("demo → search → click result → node selected and centered", async ({
   expect(Math.abs(cx - viewport.width / 2)).toBeLessThan(viewport.width / 4);
   expect(Math.abs(cy - viewport.height / 2)).toBeLessThan(viewport.height / 4);
 });
+
+test("long replies clamp on the canvas but open in full via Show more", async ({
+  page,
+}) => {
+  await page.goto("/app");
+  await page.getByRole("button", { name: "Decline" }).click();
+  await page.getByRole("button", { name: "Load demo conversation" }).click();
+
+  // The demo's day-split reply is longer than the 6-line clamp, so its node
+  // must offer "Show more"…
+  const showMore = page.getByRole("button", { name: "Show more" }).first();
+  await expect(showMore).toBeVisible();
+  await showMore.click();
+
+  // …which opens the focused reading view with the FULL text (the canvas
+  // node only ever shows the first lines).
+  const reader = page.getByLabel("Focused reading view");
+  await expect(reader).toBeVisible();
+  await expect(reader).toContainText("food and markets?");
+});

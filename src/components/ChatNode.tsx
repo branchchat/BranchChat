@@ -5,9 +5,9 @@
 // a model badge on AI replies (which model generated this response), and a
 // hover "Branch with model" action that opens the ModelPicker for this node.
 
-import { memo } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
-import { Bot, Paperclip, RotateCcw } from "lucide-react";
+import { BookOpen, Bot, Paperclip, RotateCcw } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -45,6 +45,18 @@ function ChatNodeComponent({ data, selected }: NodeProps<ChatFlowNode>) {
   const retryAssistant = useChatStore((s) => s.retryAssistant);
   const selectNode = useChatStore((s) => s.selectNode);
   const openModelPicker = useChatStore((s) => s.openModelPicker);
+  const openFocusView = useChatStore((s) => s.openFocusView);
+
+  // Long replies are clamped on the canvas (the layout's row height is
+  // fixed, so a node can't grow in place without overlapping its children).
+  // When the clamp actually cuts something off, offer "Show more", which
+  // opens the focused reading view at this node — full text, scrollable.
+  const contentRef = useRef<HTMLParagraphElement>(null);
+  const [clamped, setClamped] = useState(false);
+  useEffect(() => {
+    const el = contentRef.current;
+    setClamped(!!el && el.scrollHeight > el.clientHeight + 1);
+  }, [node.content, node.isLoading]);
 
   // Which model generated this reply (assistant nodes, stamped from the
   // backend response). Label resolves via the cached catalog, raw id before
@@ -98,16 +110,33 @@ function ChatNodeComponent({ data, selected }: NodeProps<ChatFlowNode>) {
           {node.isLoading ? (
             <p className="text-sm text-muted-foreground italic">Thinking…</p>
           ) : (
-            <p
-              className={cn(
-                "line-clamp-6 text-sm whitespace-pre-wrap text-foreground",
-                node.isError && "text-destructive",
+            <>
+              <p
+                ref={contentRef}
+                className={cn(
+                  "line-clamp-6 text-sm whitespace-pre-wrap text-foreground",
+                  node.isError && "text-destructive",
+                )}
+              >
+                {node.content || (
+                  <span className="text-muted-foreground italic">Empty</span>
+                )}
+              </p>
+              {clamped && (
+                <button
+                  type="button"
+                  className="nodrag mt-1 inline-flex cursor-pointer items-center gap-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    selectNode(node.id);
+                    openFocusView();
+                  }}
+                >
+                  <BookOpen className="size-3" />
+                  Show more
+                </button>
               )}
-            >
-              {node.content || (
-                <span className="text-muted-foreground italic">Empty</span>
-              )}
-            </p>
+            </>
           )}
 
           {/* Files that rode with this message (metadata only — the bytes
