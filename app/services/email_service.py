@@ -18,7 +18,13 @@ logger = logging.getLogger("branchchat.email")
 _RESEND_ENDPOINT = "https://api.resend.com/emails"
 
 
-async def _send(to: str, subject: str, html: str) -> None:
+async def _send(
+    to: str,
+    subject: str,
+    html: str,
+    *,
+    headers: dict[str, str] | None = None,
+) -> None:
     if not settings.RESEND_API_KEY or not settings.RESEND_FROM_EMAIL:
         if settings.is_production:
             # The html carries a live verification/reset link — logging it in
@@ -31,17 +37,21 @@ async def _send(to: str, subject: str, html: str) -> None:
         else:
             logger.info("[email:dev] to=%s subject=%s\n%s", to, subject, html)
         return
+    payload: dict[str, object] = {
+        "from": settings.RESEND_FROM_EMAIL,
+        "to": [to],
+        "subject": subject,
+        "html": html,
+    }
+    # e.g. List-Unsubscribe / List-Unsubscribe-Post for marketing sends.
+    if headers:
+        payload["headers"] = headers
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
             resp = await client.post(
                 _RESEND_ENDPOINT,
                 headers={"Authorization": f"Bearer {settings.RESEND_API_KEY}"},
-                json={
-                    "from": settings.RESEND_FROM_EMAIL,
-                    "to": [to],
-                    "subject": subject,
-                    "html": html,
-                },
+                json=payload,
             )
         if resp.status_code >= 400:
             logger.error("Resend error %s: %s", resp.status_code, resp.text[:300])
@@ -204,4 +214,170 @@ async def send_beta_approved_email(to: str) -> None:
             button_url=f"{settings.APP_BASE_URL}/app",
             footnote="You're receiving this because you requested beta access.",
         ),
+    )
+
+
+# --- marketing layout (announcements) ----------------------------------------
+# Unlike the transactional _layout (one centered paragraph + one button), an
+# announcement carries multiple left-aligned sections, so the body is passed
+# as ready HTML. It also REQUIRES an unsubscribe link (it's marketing, not
+# transactional) which the footer renders and the caller mirrors into the
+# List-Unsubscribe header.
+
+_SECTION_LABEL = (
+    "margin:24px 0 10px;font-size:13px;font-weight:700;color:#18181b;"
+    "text-transform:uppercase;letter-spacing:0.03em;"
+)
+_BODY = "font-size:14px;line-height:1.65;color:#52525b;"
+
+
+def _email_button(label: str, url: str) -> str:
+    return (
+        '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
+        'style="margin:24px 0;"><tr><td align="center">'
+        f'<a href="{url}" style="display:inline-block;background-color:#18181b;'
+        "color:#ffffff;font-size:14px;font-weight:600;text-decoration:none;"
+        f'padding:13px 28px;border-radius:12px;">{label}</a>'
+        "</td></tr></table>"
+    )
+
+
+def _marketing_layout(
+    *,
+    heading: str,
+    body_html: str,
+    unsubscribe_url: str,
+    footnote: str,
+) -> str:
+    return f"""\
+<!DOCTYPE html>
+<html>
+<body style="margin:0;padding:0;background-color:#f4f4f5;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
+         style="background-color:#f4f4f5;padding:32px 16px;">
+    <tr><td align="center">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
+             style="max-width:440px;">
+        <tr><td style="padding:0 8px 16px;">
+          <img src="{_BRAND_MARK}" width="28" height="28" alt=""
+               style="border-radius:8px;vertical-align:middle;">
+          <span style="font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+                       font-size:16px;font-weight:700;color:#18181b;vertical-align:middle;
+                       padding-left:8px;">BranchChat</span>
+        </td></tr>
+        <tr><td style="background-color:#ffffff;border-radius:16px;padding:36px 32px;
+                       font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+          <h1 style="margin:0 0 16px;font-size:20px;line-height:1.3;font-weight:700;
+                     color:#18181b;text-align:center;">{heading}</h1>
+          {body_html}
+        </td></tr>
+        <tr><td style="padding:20px 8px 0;text-align:center;
+                       font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+          <p style="margin:0 0 8px;font-size:12px;line-height:1.6;color:#a1a1aa;">{footnote}</p>
+          <p style="margin:0;font-size:12px;color:#a1a1aa;">
+            <a href="https://branch-chat.com" style="color:#71717a;text-decoration:underline;">branch-chat.com</a>
+            &nbsp;&middot;&nbsp;
+            <a href="https://branch-chat.com/privacy" style="color:#71717a;text-decoration:underline;">Privacy</a>
+            &nbsp;&middot;&nbsp;
+            <a href="{unsubscribe_url}" style="color:#71717a;text-decoration:underline;">Unsubscribe</a>
+          </p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>"""
+
+
+def _steps(items: list[str]) -> str:
+    rows = "".join(
+        f'<tr><td style="width:22px;vertical-align:top;color:#18181b;font-weight:700;'
+        f'padding-bottom:8px;">{i}.</td>'
+        f'<td style="padding-bottom:8px;">{html}</td></tr>'
+        for i, html in enumerate(items, start=1)
+    )
+    return (
+        f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
+        f'style="{_BODY}">{rows}</table>'
+    )
+
+
+def _launch_body() -> str:
+    bold = "color:#18181b;font-weight:600;"
+    return (
+        f'<div style="{_BODY}">'
+        "<p style=\"margin:0 0 14px;\">Hey,</p>"
+        "<p style=\"margin:0 0 14px;\">You asked us to let you know when "
+        "BranchChat was ready. It's ready.</p>"
+        "<p style=\"margin:0 0 14px;\">BranchChat is a different way to talk to "
+        "AI. Instead of one long thread, every conversation is a tree on a "
+        "canvas. Ask a question, branch into alternate paths, hand different "
+        "branches to different models (Claude, GPT, and Gemini are all in), and "
+        "link context between branches when one exploration should inform "
+        "another.</p>"
+        "</div>"
+        f'<p style="{_SECTION_LABEL}">What to do now</p>'
+        + _steps(
+            [
+                f'Go to <span style="{bold}">branch-chat.com/beta</span> and '
+                "create your account.",
+                "That's it. Signups go into our approval queue and we approve "
+                "testers in waves, so you may not get in the same day. You'll "
+                "get an email from us the moment your account is approved.",
+            ]
+        )
+        + _email_button("Claim your beta spot", "https://branch-chat.com/beta")
+        + f'<p style="{_SECTION_LABEL}">Once you\'re approved</p>'
+        + _steps(
+            [
+                f'Go back to <span style="{bold}">branch-chat.com/beta</span> '
+                "and hit Sign in, or use the Sign in link at the bottom of the "
+                "home page. Either takes you straight into the app.",
+                "When the cookie banner appears, please hit Accept. The "
+                "analytics are privacy-first and never record your chat "
+                "content, but they power our feedback tools and show us where "
+                "the app confuses people, which is the whole point of a beta.",
+                "Load one of the demo conversations from the sidebar to get a "
+                "feel for branching, then start your own.",
+            ]
+        )
+        + f'<p style="{_SECTION_LABEL}">What we ask of you</p>'
+        + f'<div style="{_BODY}">'
+        "<p style=\"margin:0 0 14px;\">This is a real beta. Things will "
+        "occasionally be rough, and the way we fix them is hearing from you. "
+        "There's a Feedback button at the top of the app. Use it often. Found a "
+        "bug, hit something confusing, wished a feature existed, hated something "
+        "we shipped: two sentences in that box is the most valuable thing you "
+        "can do for us. We read every one.</p>"
+        "<p style=\"margin:0 0 14px;\">We'll keep improving in waves alongside "
+        "the approvals: each batch of testers comes with a batch of fixes and "
+        "features driven by the feedback from the previous one.</p>"
+        "<p style=\"margin:0 0 4px;\">Thanks for waiting on us. See you in the "
+        "tree.</p>"
+        f'<p style="margin:0;{bold}">Roshaan and Jayden<br>'
+        "<span style=\"color:#52525b;font-weight:400;\">BranchChat</span></p>"
+        "</div>"
+    )
+
+
+async def send_launch_announcement(to: str, *, unsubscribe_url: str) -> None:
+    """Beta-launch blast to a waitlist contact (marketing, not transactional).
+
+    Carries a real unsubscribe link in both the footer and the
+    List-Unsubscribe header (RFC 8058 one-click), so it stays CAN-SPAM/GDPR
+    clean. ``unsubscribe_url`` is per-recipient (services.unsubscribe).
+    """
+    await _send(
+        to,
+        "BranchChat is live. Come claim your beta spot",
+        _marketing_layout(
+            heading="BranchChat is live",
+            body_html=_launch_body(),
+            unsubscribe_url=unsubscribe_url,
+            footnote="You're receiving this because you joined the BranchChat waitlist.",
+        ),
+        headers={
+            "List-Unsubscribe": f"<{unsubscribe_url}>",
+            "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+        },
     )

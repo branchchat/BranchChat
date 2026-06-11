@@ -29,3 +29,8 @@ class WaitlistEntry(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=text("now()")
     )
+    # Set when this contact opts out of marketing email; the launch-broadcast
+    # query skips any row where it's non-null. NULL = still subscribed.
+    unsubscribed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )

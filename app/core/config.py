@@ -146,6 +146,10 @@ class Settings(BaseSettings):
     RESEND_FROM_EMAIL: str | None = None
     # Frontend origin used to build verification / reset links.
     APP_BASE_URL: str = "http://localhost:5173"
+    # Public origin of THIS API — used to build the unsubscribe links baked
+    # into marketing emails (they hit the backend, not the SPA). In prod set
+    # to https://api.branch-chat.com.
+    API_PUBLIC_URL: str = "http://localhost:8000"
     VERIFY_TOKEN_TTL_HOURS: int = 24
     RESET_TOKEN_TTL_MINUTES: int = 30
 
