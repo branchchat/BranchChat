@@ -85,3 +85,16 @@ async def send_account_exists_email(to: str) -> None:
         f'exists. If that was you, just <a href="{settings.APP_BASE_URL}/login">'
         f'log in</a> or <a href="{link}">reset your password</a>.</p>',
     )
+
+
+async def send_beta_approved_email(to: str) -> None:
+    """Sent when an admin grants beta access (see routers/admin.py)."""
+    await _send(
+        to,
+        "You're in - BranchChat beta access approved",
+        f'<p>Your BranchChat beta access has been approved. Head to '
+        f'<a href="{settings.APP_BASE_URL}/app">{settings.APP_BASE_URL}/app</a> '
+        f"and sign in to start exploring branching conversations.</p>"
+        f"<p>Found something rough? The Feedback button in the app goes "
+        f"straight to us.</p>",
+    )

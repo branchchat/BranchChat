@@ -27,7 +27,7 @@ from app.core.security_headers import (
     OriginCheckMiddleware,
     SecurityHeadersMiddleware,
 )
-from app.routers import auth, chat, health, models, sync, waitlist
+from app.routers import admin, auth, chat, health, models, sync, waitlist
 from app.services import analytics
 
 logging.basicConfig(level=logging.INFO)
@@ -211,6 +211,7 @@ def create_app() -> FastAPI:
         )
 
     app.include_router(health.router)
+    app.include_router(admin.router)
     app.include_router(auth.router)
     app.include_router(chat.router)
     app.include_router(models.router)

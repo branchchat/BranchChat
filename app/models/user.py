@@ -30,6 +30,12 @@ class User(Base):
     email_verified: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default=text("false")
     )
+    # Manually granted by an admin (see routers/admin.py). Gates the AI chat
+    # endpoints during the private beta: accounts are free to create but can't
+    # spend provider tokens until approved.
+    is_beta_tester: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=text("false")
+    )
     failed_login_count: Mapped[int] = mapped_column(
         Integer, nullable=False, server_default=text("0")
     )

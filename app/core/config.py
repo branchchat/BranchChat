@@ -130,6 +130,11 @@ class Settings(BaseSettings):
     # identifiers only). 0 disables the sweep.
     LOGIN_ATTEMPTS_RETENTION_DAYS: int = 30
 
+    # -- Admin API -----------------------------------------------------------
+    # Bearer for /api/admin/* (beta approvals). Unset = admin API disabled
+    # (every admin route 404s). Use a long random value in production.
+    ADMIN_API_TOKEN: str | None = None
+
     # -- Email (Resend) + token TTLs ----------------------------------------
     RESEND_API_KEY: str | None = None
     RESEND_FROM_EMAIL: str | None = None

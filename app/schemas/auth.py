@@ -49,6 +49,7 @@ class UserOut(BaseModel):
     id: uuid.UUID
     email: str
     email_verified: bool
+    is_beta_tester: bool
     created_at: datetime
 
 

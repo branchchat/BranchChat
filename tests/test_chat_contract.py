@@ -37,10 +37,15 @@ async def _fake_db():
     yield None
 
 
+async def _noop_beta_gate(session, ctx):
+    return None
+
+
 @pytest.fixture
 def stub_chat_infra(monkeypatch):
-    """Stub quota/DB/rate-limit only — generation stays real."""
+    """Stub quota/DB/rate-limit/beta-gate only — generation stays real."""
     monkeypatch.setattr(chat_module, "rls_tx", _noop_rls)
+    monkeypatch.setattr(chat_module, "_require_beta_access", _noop_beta_gate)
     monkeypatch.setattr(
         chat_module.usage_service, "enforce_message_quota", _noop_quota
     )

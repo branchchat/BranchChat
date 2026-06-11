@@ -21,16 +21,52 @@ buckets.
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.rate_limit import ai_rate_limit
 from app.db.session import get_db, rls_tx
 from app.routers.deps import IdentityContext, request_identity
 from app.schemas.chat import ChatRequest, ChatResponse
-from app.services import analytics, chat_service, model_catalog, usage_service
+from app.services import (
+    analytics,
+    auth_service,
+    chat_service,
+    model_catalog,
+    usage_service,
+)
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
+
+
+async def _require_beta_access(
+    session: AsyncSession, ctx: IdentityContext
+) -> None:
+    """Private-beta gate: only approved accounts may spend provider tokens.
+
+    Runs BEFORE quota is charged. The old client-side passphrase only hid the
+    UI — these endpoints were openly callable, so anonymous traffic could burn
+    the daily token budget. Now anonymous callers get a sign-up pointer and
+    unapproved accounts a pending notice; neither costs anything.
+    """
+    if ctx.user_id is None:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            detail=(
+                "BranchChat is in private beta. Create an account at "
+                "branch-chat.com/beta to request access."
+            ),
+        )
+    async with rls_tx(session, ctx.user_id):
+        user = await auth_service.get_user_by_id(session, ctx.user_id)
+    if user is None or not user.is_beta_tester:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            detail=(
+                "Your account is awaiting beta approval — we'll email you "
+                "as soon as you're in."
+            ),
+        )
 
 
 async def _charge_quota(
@@ -70,6 +106,9 @@ async def chat(
     # Reject unknown providers/models BEFORE charging quota — a typo'd URL or
     # model id must not burn a daily message.
     _, model_id = chat_service.resolve_provider_and_model(provider, req.model)
+
+    # Private beta: only approved accounts may reach the providers at all.
+    await _require_beta_access(session, ctx)
 
     # High-cost models draw from the smaller premium bucket regardless of
     # coding mode — cost is the scarcer resource.
