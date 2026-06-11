@@ -21,7 +21,12 @@ The project is moving from Codex to Claude, and work may happen from two separat
 - Use explicit file staging. Avoid `git add -A` if unrelated files are present.
 - Do not force-push or rewrite `main`.
 - For UI changes, run at least `npm.cmd test` and `npm.cmd run build`.
-- For backend changes, run `.\.venv\Scripts\python.exe -m unittest discover tests` or a narrower relevant test if time is tight.
+- For backend changes, run ONLY the test files relevant to what changed
+  (e.g. `pytest tests/test_sync.py`) plus a lint/import check — NOT the full
+  suite. The suite is DB-backed and slow; reserve a full
+  `pytest` run for major changes (new endpoints, migrations, auth/quota/sync
+  semantics) and as a final check before pushing those. (Roshaan's call,
+  2026-06-11: the full suite was being run far too often.)
 - If changing canvas behavior, verify in a browser when practical.
 
 ## Current Branch State At Handoff
@@ -81,7 +86,12 @@ npm.cmd run build
 npm.cmd run lint
 npm.cmd run dev -- --host 127.0.0.1 --port 5173
 
-.\.venv\Scripts\python.exe -m unittest discover tests
+# Backend tests are pytest (NOT unittest) and need ENV=test + the local
+# Postgres container running. Default to targeted files; full suite only for
+# major changes.
+$env:ENV="test"; .\.venv\Scripts\python.exe -m pytest tests/test_<relevant>.py -p no:warnings -q
+$env:ENV="test"; .\.venv\Scripts\python.exe -m pytest -p no:warnings -q   # major changes only
+
 .\.venv\Scripts\python.exe -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
