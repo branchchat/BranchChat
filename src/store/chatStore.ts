@@ -20,7 +20,7 @@ import {
   type LinkedContextBlock,
 } from "@/lib/api";
 import { useAuthStore } from "@/store/authStore";
-import { buildDemoChat } from "@/lib/demoChat";
+import { DEMO_CHATS, type DemoKind } from "@/lib/demoChat";
 import { parseSession } from "@/lib/sessionTransfer";
 import type {
   ChatNode,
@@ -410,8 +410,9 @@ export interface ChatStoreState {
   // Create a new empty chat and switch to it; returns the new chat id.
   createChat: (opts?: { title?: string; workspace?: Workspace }) => string;
   // Add a prebuilt sample branching conversation and switch to it; returns its
-  // id. Available any time (not just first-run onboarding).
-  loadDemoChat: () => string;
+  // id. Available any time (not just first-run onboarding). `kind` picks one
+  // of the DEMO_CHATS builders; omitted = the intro (Kyoto) demo.
+  loadDemoChat: (kind?: DemoKind) => string;
   // Make `chatId` the active chat (no-op if it doesn't exist).
   switchChat: (chatId: string) => void;
   // Rename `chatId`; empty/whitespace titles are ignored.
@@ -691,8 +692,10 @@ export const useChatStore = create<ChatStoreState>()(
           return chat.id;
         },
 
-        loadDemoChat: () => {
-          const chat = buildDemoChat({
+        loadDemoChat: (kind) => {
+          const demo =
+            DEMO_CHATS.find((d) => d.kind === kind) ?? DEMO_CHATS[0];
+          const chat = demo.build({
             node: createNodeId,
             chat: createChatId,
             journal: createJournalId,

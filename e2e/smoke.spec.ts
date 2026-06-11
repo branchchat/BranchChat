@@ -15,7 +15,7 @@ test("demo → search → click result → node selected and centered", async ({
   // decline it (keeps PostHog off for the test run).
   await page.getByRole("button", { name: "Decline" }).click();
 
-  await page.getByRole("button", { name: "Load demo conversation" }).click();
+  await page.getByRole("button", { name: "Demo: Kyoto trip" }).click();
 
   // "sake breweries" appears in exactly one demo node, on the NON-active
   // "Food & markets" branch — so the click must actually move the selection.
@@ -55,7 +55,7 @@ test("long replies clamp on the canvas but open in full via Show more", async ({
 }) => {
   await page.goto("/app");
   await page.getByRole("button", { name: "Decline" }).click();
-  await page.getByRole("button", { name: "Load demo conversation" }).click();
+  await page.getByRole("button", { name: "Demo: Kyoto trip" }).click();
 
   // Center the long day-split reply first (search pans to it at zoom 1 —
   // clicking tiny fit-view-zoomed targets is flaky).
@@ -80,7 +80,7 @@ test("long replies clamp on the canvas but open in full via Show more", async ({
 test("nodes can be dragged and keep their new position", async ({ page }) => {
   await page.goto("/app");
   await page.getByRole("button", { name: "Decline" }).click();
-  await page.getByRole("button", { name: "Load demo conversation" }).click();
+  await page.getByRole("button", { name: "Demo: Kyoto trip" }).click();
 
   // Center the target node first (the demo tree extends past the viewport,
   // and mouse events can't reach an off-screen node).
@@ -113,7 +113,7 @@ test("dragging between side ports creates a context link; clicking the edge remo
 }) => {
   await page.goto("/app");
   await page.getByRole("button", { name: "Decline" }).click();
-  await page.getByRole("button", { name: "Load demo conversation" }).click();
+  await page.getByRole("button", { name: "Demo: Kyoto trip" }).click();
 
   // Center one of the demo's two sibling branch nodes at zoom 1; its sibling
   // sits one layout stride to the right, still inside the viewport. The side

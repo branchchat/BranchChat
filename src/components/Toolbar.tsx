@@ -7,7 +7,9 @@
 
 import { useRef, useState } from "react";
 import {
+  Code2,
   Download,
+  FlaskConical,
   Pencil,
   Plus,
   Search,
@@ -40,6 +42,7 @@ import {
   STORAGE_WARN_CHARS,
 } from "@/lib/sessionTransfer";
 import { SyncToggle } from "@/components/SyncToggle";
+import { DEMO_CHATS } from "@/lib/demoChat";
 import { useChatStore } from "@/store/chatStore";
 import type { ChatSessionState, Workspace } from "@/types/chat";
 
@@ -308,15 +311,27 @@ export function Toolbar({ onNavigate }: { onNavigate?: () => void } = {}) {
 
       <div className="space-y-1 border-t p-2">
         <SyncToggle />
-        <Button
-          variant="ghost"
-          size="sm"
-          className="w-full justify-start gap-2 text-xs text-muted-foreground"
-          onClick={() => loadDemoChat()}
-        >
-          <Sparkles className="size-3.5" />
-          Load demo conversation
-        </Button>
+        {/* Sample conversations: the intro tree, a deep-research workflow
+            (model branches + a context link), and an advanced debugging
+            session (two models, two competing fixes). */}
+        {DEMO_CHATS.map((demo) => (
+          <Button
+            key={demo.kind}
+            variant="ghost"
+            size="sm"
+            className="w-full justify-start gap-2 text-xs text-muted-foreground"
+            onClick={() => loadDemoChat(demo.kind)}
+          >
+            {demo.kind === "research" ? (
+              <FlaskConical className="size-3.5" />
+            ) : demo.kind === "coding" ? (
+              <Code2 className="size-3.5" />
+            ) : (
+              <Sparkles className="size-3.5" />
+            )}
+            {demo.label}
+          </Button>
+        ))}
 
         <div className="flex gap-1">
           <Button

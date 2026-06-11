@@ -71,6 +71,44 @@ describe("chat management actions", () => {
     expect(hasBranch).toBe(true);
   });
 
+  it("loadDemoChat('research') shows off model branches and a context link", () => {
+    const id = store().loadDemoChat("research");
+    const chat = store().chats[id];
+    const nodes = Object.values(chat.nodes);
+
+    // Two branches with DIFFERENT model overrides (the multi-model feature).
+    const overrides = nodes
+      .filter((n) => n.modelOverride)
+      .map((n) => n.modelOverride!.provider);
+    expect(new Set(overrides).size).toBeGreaterThanOrEqual(2);
+    // Every assistant reply is stamped with what generated it.
+    for (const n of nodes.filter((x) => x.role === "assistant")) {
+      expect(n.provider).toBeTruthy();
+      expect(n.model).toBeTruthy();
+    }
+    // The synthesis step context-links a node that exists on ANOTHER branch.
+    const linker = nodes.find((n) => n.contextNodeIds?.length);
+    expect(linker).toBeDefined();
+    const source = chat.nodes[linker!.contextNodeIds![0]];
+    expect(source).toBeDefined();
+    expect(chat.activePath).not.toContain(source.id);
+  });
+
+  it("loadDemoChat('coding') branches two fixes with different models", () => {
+    const id = store().loadDemoChat("coding");
+    const chat = store().chats[id];
+    const nodes = Object.values(chat.nodes);
+
+    const branchStarts = nodes.filter((n) => n.modelOverride);
+    expect(branchStarts).toHaveLength(2);
+    expect(
+      new Set(branchStarts.map((n) => n.modelOverride!.provider)).size,
+    ).toBe(2);
+    // The fixes are real code, rendered via Markdown fenced blocks.
+    const hasCode = nodes.some((n) => n.content.includes("```sql"));
+    expect(hasCode).toBe(true);
+  });
+
   it("openNode switches chat, selects the node, and sets a focus request", () => {
     const id = store().loadDemoChat();
     const chat = store().chats[id];
