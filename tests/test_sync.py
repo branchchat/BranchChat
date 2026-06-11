@@ -1,8 +1,8 @@
-"""DB-backed tests for /api/sync — the optional chat-tree sync for signed-in users.
+﻿"""DB-backed tests for /api/sync â€” the optional chat-tree sync for signed-in users.
 
 Requires a live Postgres (migrated through 0005). Skips automatically if one
 isn't reachable. Covers the contract (manifest/get/put/delete), last-write-wins
-versioning, payload/count guardrails, and — the part that matters — that one
+versioning, payload/count guardrails, and â€” the part that matters â€” that one
 user can never see another user's chats even with a guessed chat id.
 """
 
@@ -165,10 +165,10 @@ def test_users_are_isolated_even_with_guessed_ids():
             "/api/sync/chats/shared_id",
             json={"payload": _chat_payload("alice", 1), "updated_at": 1, "title": "alice"},
         )
-        # Bob can't read Alice's chat even knowing its id…
+        # Bob can't read Alice's chat even knowing its idâ€¦
         assert b.get("/api/sync/chats/shared_id").status_code == 404
         assert b.get("/api/sync/chats").json()["chats"] == []
-        # …and writing the same id creates HIS row, not an overwrite of hers.
+        # â€¦and writing the same id creates HIS row, not an overwrite of hers.
         b.put(
             "/api/sync/chats/shared_id",
             json={"payload": _chat_payload("bob", 9), "updated_at": 9, "title": "bob"},
@@ -233,3 +233,70 @@ def test_chat_count_cap(monkeypatch):
         assert r.json()["status"] == "stored"
     finally:
         c.__exit__(None, None, None)
+
+
+def test_payloads_are_sealed_at_rest_when_key_set(monkeypatch):
+    import base64
+    import os
+
+    from app.core.config import settings as cfg
+    from app.services import sync_crypto
+
+    key = base64.urlsafe_b64encode(os.urandom(32)).decode()
+    monkeypatch.setattr(cfg, "SYNC_ENC_KEY", key)
+
+    c = _signed_in_client("sealed@example.com")
+    try:
+        secret = "the launch codes are 0000"
+        r = c.put(
+            "/api/sync/chats/chat_s",
+            json={"payload": _chat_payload(secret, 100), "updated_at": 100},
+        )
+        assert r.json()["status"] == "stored"
+
+        # The RAW row (what a dashboard/SQL viewer sees) is an opaque sealed
+        # envelope - the conversation text must not appear anywhere in it.
+        rows = _run(
+            _admin("SELECT payload::text FROM synced_chats WHERE chat_id = 'chat_s'")
+        )
+        raw = rows[0][0]
+        assert '"enc": 1' in raw or '"enc":1' in raw
+        assert secret not in raw
+
+        # The API round-trip still serves plaintext to the owner.
+        body = c.get("/api/sync/chats/chat_s").json()
+        assert body["payload"]["chat"]["title"] == secret
+
+        # Sanity: seal/unseal is a true inverse.
+        assert sync_crypto.unseal(sync_crypto.seal({"a": 1})) == {"a": 1}
+    finally:
+        c.__exit__(None, None, None)
+
+
+def test_sealed_row_with_lost_key_is_410(monkeypatch):
+    import base64
+    import os
+
+    from app.core.config import settings as cfg
+
+    key = base64.urlsafe_b64encode(os.urandom(32)).decode()
+    monkeypatch.setattr(cfg, "SYNC_ENC_KEY", key)
+
+    c = _signed_in_client("rotated@example.com")
+    try:
+        c.put(
+            "/api/sync/chats/chat_r",
+            json={"payload": _chat_payload("x", 1), "updated_at": 1},
+        )
+        # Key rotated underneath the stored row -> unreadable, clean 410.
+        monkeypatch.setattr(
+            cfg,
+            "SYNC_ENC_KEY",
+            base64.urlsafe_b64encode(os.urandom(32)).decode(),
+        )
+        r = c.get("/api/sync/chats/chat_r")
+        assert r.status_code == 410
+        assert "sync again" in r.json()["detail"]
+    finally:
+        c.__exit__(None, None, None)
+

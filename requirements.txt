@@ -1,4 +1,4 @@
-# fastapi 0.136 + starlette 1.0.1 clear the 2025/2026 Starlette advisories
+﻿# fastapi 0.136 + starlette 1.0.1 clear the 2025/2026 Starlette advisories
 # (CVE-2025-62727, PYSEC-2026-161); starlette pinned explicitly because it is
 # the security-relevant package here.
 fastapi==0.136.3
@@ -16,3 +16,4 @@ httpx==0.28.1
 posthog==3.7.4
 email-validator==2.2.0
 python-dotenv==1.2.2
+cryptography==48.0.1

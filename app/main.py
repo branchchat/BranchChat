@@ -169,6 +169,12 @@ def _warn_on_risky_production_config() -> None:
             "DB TLS is encrypted but UNVERIFIED (no DB_SSL_CA_FILE). Pin the "
             "Supabase CA certificate to enable full verification."
         )
+    if not settings.SYNC_ENC_KEY:
+        logger.warning(
+            "SYNC_ENC_KEY is unset: synced chat payloads are stored as "
+            "PLAINTEXT — anyone with database access can read user "
+            "conversations. Set a 32-byte base64 key."
+        )
 
 
 @asynccontextmanager

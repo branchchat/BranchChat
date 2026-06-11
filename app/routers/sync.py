@@ -31,6 +31,7 @@ from app.core.rate_limit import auth_rate_limit
 from app.db.session import get_db, rls_tx
 from app.models import SyncedChat, User
 from app.routers.deps import current_user
+from app.services import sync_crypto
 from app.schemas.sync import (
     SyncedChatOut,
     SyncManifest,
@@ -95,11 +96,21 @@ async def get_chat(
         ).scalar_one_or_none()
     if row is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Chat not found.")
+    try:
+        payload = sync_crypto.unseal(row.payload)
+    except sync_crypto.SealedPayloadError:
+        # Key rotated/lost: the local copy on the user's device is still the
+        # working copy; their next push overwrites this row.
+        raise HTTPException(
+            status.HTTP_410_GONE,
+            detail="This synced copy can't be read anymore — sync again from "
+            "a device that has the chat.",
+        ) from None
     return SyncedChatOut(
         chat_id=row.chat_id,
         title=row.title,
         updated_at=row.client_updated_at,
-        payload=row.payload,
+        payload=payload,
     )
 
 
@@ -149,7 +160,9 @@ async def put_chat(
             user_id=user.id,
             chat_id=chat_id,
             title=req.title,
-            payload=req.payload,
+            # Sealed (compressed + encrypted) at rest when SYNC_ENC_KEY is
+            # set: DB access alone must not expose conversations.
+            payload=sync_crypto.seal(req.payload),
             client_updated_at=req.updated_at,
         )
         stmt = stmt.on_conflict_do_update(

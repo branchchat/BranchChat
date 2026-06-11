@@ -130,6 +130,12 @@ class Settings(BaseSettings):
     # identifiers only). 0 disables the sweep.
     LOGIN_ATTEMPTS_RETENTION_DAYS: int = 30
 
+    # -- Server-side sync ----------------------------------------------------
+    # 32-byte urlsafe-base64 key; synced chat payloads are compressed +
+    # AES-256-GCM sealed under it before hitting the database, so DB access
+    # alone can't read conversations. Unset = plaintext (dev only).
+    SYNC_ENC_KEY: str | None = None
+
     # -- Admin API -----------------------------------------------------------
     # Bearer for /api/admin/* (beta approvals). Unset = admin API disabled
     # (every admin route 404s). Use a long random value in production.
