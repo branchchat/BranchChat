@@ -1,8 +1,19 @@
-import { lazy, Suspense } from "react"
-import { Routes, Route, Navigate } from "react-router-dom"
+import { lazy, Suspense, useEffect } from "react"
+import { Routes, Route, Navigate, useLocation } from "react-router-dom"
 
 import { Landing } from "@/pages/Landing"
 import { CookieConsent } from "@/components/CookieConsent"
+
+// SPA navigations keep the window scroll position, so clicking a footer link
+// at the bottom of the landing page opened /app scrolled past its own header
+// (a fresh URL load starts at 0 — hence "it works when I type the address").
+function ScrollToTop() {
+  const { pathname } = useLocation()
+  useEffect(() => {
+    window.scrollTo(0, 0)
+  }, [pathname])
+  return null
+}
 
 // Landing ("/") stays eager — it's the indexed entry route, so we don't want a
 // chunk round-trip before first paint. Everything else is lazy so the heavy
@@ -32,6 +43,7 @@ const VerifyEmail = lazy(() =>
 function App() {
   return (
     <>
+      <ScrollToTop />
       <Suspense fallback={null}>
         <Routes>
           <Route path="/" element={<Landing />} />

@@ -24,12 +24,23 @@ export interface LinkedContextBlock {
   messages: ProviderMessage[];
 }
 
+// One file riding with the message being sent. `data` is raw base64 (no
+// data: prefix). Backend caps: 3 per message, ~1.4 MB binary each.
+export interface AttachmentPayload {
+  name: string;
+  media_type: string;
+  data: string;
+}
+
 export interface ChatRequest {
   node_id: string;
   message: string;
   history: ProviderMessage[];
   linked_context: LinkedContextBlock[];
   coding_mode: boolean;
+  // Attachments apply to THIS message only — they are not replayed with
+  // history on later turns (and their bytes are never persisted locally).
+  attachments?: AttachmentPayload[];
   personalization?: string;
   // Optional model override for model-specific branches. Absent = the
   // provider's server-side default (the original behaviour).

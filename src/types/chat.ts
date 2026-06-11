@@ -21,6 +21,12 @@ export interface NodeComment {
   author?: string;
 }
 
+// Display metadata for a file sent with a message (never the bytes).
+export interface NodeAttachment {
+  name: string;
+  mediaType: string;
+}
+
 // One research-journal audit entry (branch / tag / compare / note events).
 export interface JournalEntry {
   id: string;
@@ -74,6 +80,11 @@ export interface ChatNode {
   // Local organization metadata.
   tags?: string[];
   comments?: NodeComment[];
+
+  // Files that were sent WITH this user message. Metadata only — the bytes
+  // go to the provider once and are never persisted (localStorage and the
+  // sync payload would blow up otherwise).
+  attachments?: NodeAttachment[];
 
   // Per-node mode + transient flags.
   codingMode?: boolean;

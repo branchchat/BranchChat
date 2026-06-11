@@ -7,7 +7,7 @@
 
 import { memo } from "react";
 import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
-import { Bot, RotateCcw } from "lucide-react";
+import { Bot, Paperclip, RotateCcw } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -107,6 +107,19 @@ function ChatNodeComponent({ data, selected }: NodeProps<ChatFlowNode>) {
               {node.content || (
                 <span className="text-muted-foreground italic">Empty</span>
               )}
+            </p>
+          )}
+
+          {/* Files that rode with this message (metadata only — the bytes
+              went to the provider once and aren't stored). */}
+          {!!node.attachments?.length && (
+            <p className="mt-1.5 flex flex-wrap gap-x-2 gap-y-0.5 text-[11px] text-muted-foreground">
+              {node.attachments.map((a, i) => (
+                <span key={`${a.name}:${i}`} className="inline-flex items-center gap-1">
+                  <Paperclip className="size-3" />
+                  {a.name}
+                </span>
+              ))}
             </p>
           )}
 

@@ -16,6 +16,7 @@ import {
   ChatApiError,
   isBackendConfigured,
   requestChatReply,
+  type AttachmentPayload,
 } from "@/lib/api";
 import { useAuthStore } from "@/store/authStore";
 import { buildDemoChat } from "@/lib/demoChat";
@@ -29,6 +30,13 @@ import type {
 } from "@/types/chat";
 
 const STORAGE_KEY = "branchchat-storage";
+
+// Attachment BYTES for messages whose reply is still pending, keyed by user
+// node id. Deliberately memory-only: the node persists name/type metadata for
+// display, but base64 payloads must never reach localStorage or the sync
+// blob. Consumed (and dropped) when the reply succeeds; kept across retries;
+// lost on reload — a retried node then re-sends text only.
+const pendingAttachments = new Map<string, AttachmentPayload[]>();
 
 // Schema version of the persisted blob (todo "localStorage export/import
 // versioning"). Bump when the persisted shape changes and chain a transform in
@@ -226,7 +234,10 @@ function buildExchange(
   chat: ChatSessionState,
   parentId: string,
   message: string,
-  branchMeta: Pick<ChatNode, "branchLabel" | "focusText" | "modelOverride">,
+  branchMeta: Pick<
+    ChatNode,
+    "branchLabel" | "focusText" | "modelOverride" | "attachments"
+  >,
   codingMode: boolean,
 ): { chat: ChatSessionState; userId: string; assistantId: string } | null {
   const parent = chat.nodes[parentId];
@@ -350,10 +361,12 @@ export interface ChatStoreState {
   selectNode: (nodeId: string) => void;
 
   // Linear continuation: append a user message under `parentId` (defaults to
-  // the selected node) and request an assistant reply.
+  // the selected node) and request an assistant reply. Attachments ride with
+  // this message only (bytes go to the provider; the node keeps metadata).
   addUserMessage: (
     message: string,
     parentId?: string,
+    opts?: { attachments?: AttachmentPayload[] },
   ) => ExchangeResult | null;
 
   // Branch: append a user message under `parentId` as an alternate timeline,
@@ -363,7 +376,12 @@ export interface ChatStoreState {
   branchFromNode: (
     parentId: string,
     message: string,
-    opts?: { branchLabel?: string; focusText?: string; model?: ModelChoice },
+    opts?: {
+      branchLabel?: string;
+      focusText?: string;
+      model?: ModelChoice;
+      attachments?: AttachmentPayload[];
+    },
   ) => ExchangeResult | null;
 
   // Re-request the reply for an existing (e.g. errored) assistant node.
@@ -467,6 +485,10 @@ export const useChatStore = create<ChatStoreState>()(
         // env-configured default provider, exactly the pre-feature behaviour.
         const branchModel = resolveModelForNode(chat.nodes, userId);
 
+        // Bytes for this message, if the reply hasn't succeeded yet (memory-
+        // only — survives retries, not reloads).
+        const attachments = pendingAttachments.get(userId);
+
         try {
           let reply: string;
           let generatedBy: { provider?: string; model?: string } | undefined;
@@ -478,12 +500,14 @@ export const useChatStore = create<ChatStoreState>()(
                 history,
                 linked_context: [],
                 coding_mode: codingMode,
+                attachments,
                 model: branchModel?.model,
               },
               { provider: branchModel?.provider },
             );
             reply = result.reply;
             generatedBy = { provider: result.provider, model: result.model };
+            pendingAttachments.delete(userId);
           } else {
             await new Promise((resolve) =>
               setTimeout(resolve, STUB_REPLY_DELAY_MS),
@@ -676,10 +700,11 @@ export const useChatStore = create<ChatStoreState>()(
             };
           }),
 
-        addUserMessage: (message, parentId) => {
+        addUserMessage: (message, parentId, opts) => {
           const text = message.trim();
           if (!text) return null;
 
+          const files = opts?.attachments ?? [];
           let result: ExchangeResult | null = null;
           set((state) => {
             const chat = state.chats[state.activeChatId];
@@ -688,7 +713,14 @@ export const useChatStore = create<ChatStoreState>()(
               chat,
               parentId ?? chat.selectedNodeId,
               text,
-              {},
+              files.length
+                ? {
+                    attachments: files.map((f) => ({
+                      name: f.name,
+                      mediaType: f.media_type,
+                    })),
+                  }
+                : {},
               state.codingMode,
             );
             if (!built) return {};
@@ -698,6 +730,7 @@ export const useChatStore = create<ChatStoreState>()(
 
           const settled = result as ExchangeResult | null;
           if (settled) {
+            if (files.length) pendingAttachments.set(settled.userId, files);
             void requestAssistantReply(
               get().activeChatId,
               settled.userId,
@@ -727,6 +760,12 @@ export const useChatStore = create<ChatStoreState>()(
                 branchLabel,
                 focusText: opts?.focusText,
                 modelOverride: opts?.model,
+                attachments: opts?.attachments?.length
+                  ? opts.attachments.map((f) => ({
+                      name: f.name,
+                      mediaType: f.media_type,
+                    }))
+                  : undefined,
               },
               state.codingMode,
             );
@@ -757,6 +796,9 @@ export const useChatStore = create<ChatStoreState>()(
 
           const settled = result as ExchangeResult | null;
           if (settled) {
+            if (opts?.attachments?.length) {
+              pendingAttachments.set(settled.userId, opts.attachments);
+            }
             void requestAssistantReply(
               get().activeChatId,
               settled.userId,
