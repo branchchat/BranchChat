@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import BigInteger, DateTime, ForeignKey, String, text
+from sqlalchemy import BigInteger, DateTime, ForeignKey, String, Text, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -34,7 +34,9 @@ class SyncedChat(Base):
     )
     # The frontend's chat id (client-generated string), unique per user.
     chat_id: Mapped[str] = mapped_column(String(64), primary_key=True)
-    title: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    # Sealed at rest like the payload ("enc1:..." envelope) — sealed form can
+    # exceed the API's 200-char title cap, hence Text (migration 0007).
+    title: Mapped[str | None] = mapped_column(Text, nullable=True)
     payload: Mapped[dict] = mapped_column(JSONB, nullable=False)
     # The chat's updatedAt (epoch ms) as reported by the client — the
     # last-write-wins version. BigInteger: ms timestamps overflow int4.

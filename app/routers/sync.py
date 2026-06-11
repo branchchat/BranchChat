@@ -73,11 +73,18 @@ async def list_chats(
                 ).order_by(SyncedChat.client_updated_at.desc())
             )
         ).all()
-    return SyncManifest(
-        chats=[
-            SyncManifestEntry(chat_id=r.chat_id, title=r.title, updated_at=r.client_updated_at)
-            for r in rows
-        ]
+    return SyncManifest(chats=[_manifest_entry(r) for r in rows])
+
+
+def _manifest_entry(row) -> SyncManifestEntry:
+    # Unreadable sealed title (key rotated) → no title rather than an error:
+    # the manifest must keep working so the client can re-push and re-seal.
+    try:
+        title = sync_crypto.unseal_text(row.title)
+    except sync_crypto.SealedPayloadError:
+        title = None
+    return SyncManifestEntry(
+        chat_id=row.chat_id, title=title, updated_at=row.client_updated_at
     )
 
 
@@ -106,9 +113,15 @@ async def get_chat(
             detail="This synced copy can't be read anymore — sync again from "
             "a device that has the chat.",
         ) from None
+    try:
+        title = sync_crypto.unseal_text(row.title)
+    except sync_crypto.SealedPayloadError:
+        # Payload opened fine but the title didn't (corrupt value) — serve
+        # the chat anyway; the client's next push rewrites the title.
+        title = None
     return SyncedChatOut(
         chat_id=row.chat_id,
-        title=row.title,
+        title=title,
         updated_at=row.client_updated_at,
         payload=payload,
     )
@@ -159,9 +172,10 @@ async def put_chat(
         stmt = pg_insert(SyncedChat).values(
             user_id=user.id,
             chat_id=chat_id,
-            title=req.title,
-            # Sealed (compressed + encrypted) at rest when SYNC_ENC_KEY is
-            # set: DB access alone must not expose conversations.
+            # Title and payload are both sealed at rest when SYNC_ENC_KEY is
+            # set: DB access alone must not expose conversations, and the
+            # title is conversation data too.
+            title=sync_crypto.seal_text(req.title),
             payload=sync_crypto.seal(req.payload),
             client_updated_at=req.updated_at,
         )

@@ -250,25 +250,41 @@ def test_payloads_are_sealed_at_rest_when_key_set(monkeypatch):
         secret = "the launch codes are 0000"
         r = c.put(
             "/api/sync/chats/chat_s",
-            json={"payload": _chat_payload(secret, 100), "updated_at": 100},
+            json={
+                "payload": _chat_payload(secret, 100),
+                "updated_at": 100,
+                "title": secret,
+            },
         )
         assert r.json()["status"] == "stored"
 
         # The RAW row (what a dashboard/SQL viewer sees) is an opaque sealed
-        # envelope - the conversation text must not appear anywhere in it.
+        # envelope - the conversation text must not appear anywhere in it,
+        # including the TITLE column.
         rows = _run(
-            _admin("SELECT payload::text FROM synced_chats WHERE chat_id = 'chat_s'")
+            _admin(
+                "SELECT payload::text, title FROM synced_chats "
+                "WHERE chat_id = 'chat_s'"
+            )
         )
-        raw = rows[0][0]
+        raw, raw_title = rows[0]
         assert '"enc": 1' in raw or '"enc":1' in raw
         assert secret not in raw
+        assert raw_title.startswith("enc1:")
+        assert secret not in raw_title
 
-        # The API round-trip still serves plaintext to the owner.
+        # The API round-trip still serves plaintext to the owner, manifest
+        # included.
         body = c.get("/api/sync/chats/chat_s").json()
         assert body["payload"]["chat"]["title"] == secret
+        assert body["title"] == secret
+        manifest = c.get("/api/sync/chats").json()
+        assert manifest["chats"][0]["title"] == secret
 
-        # Sanity: seal/unseal is a true inverse.
+        # Sanity: seal/unseal and seal_text/unseal_text are true inverses.
         assert sync_crypto.unseal(sync_crypto.seal({"a": 1})) == {"a": 1}
+        assert sync_crypto.unseal_text(sync_crypto.seal_text("hi")) == "hi"
+        assert sync_crypto.seal_text(None) is None
     finally:
         c.__exit__(None, None, None)
 
@@ -286,7 +302,7 @@ def test_sealed_row_with_lost_key_is_410(monkeypatch):
     try:
         c.put(
             "/api/sync/chats/chat_r",
-            json={"payload": _chat_payload("x", 1), "updated_at": 1},
+            json={"payload": _chat_payload("x", 1), "updated_at": 1, "title": "x"},
         )
         # Key rotated underneath the stored row -> unreadable, clean 410.
         monkeypatch.setattr(
@@ -297,6 +313,11 @@ def test_sealed_row_with_lost_key_is_410(monkeypatch):
         r = c.get("/api/sync/chats/chat_r")
         assert r.status_code == 410
         assert "sync again" in r.json()["detail"]
+        # The manifest must keep working (the client needs it to re-push);
+        # the unreadable title degrades to null instead of erroring.
+        m = c.get("/api/sync/chats")
+        assert m.status_code == 200
+        assert m.json()["chats"][0]["title"] is None
     finally:
         c.__exit__(None, None, None)
 

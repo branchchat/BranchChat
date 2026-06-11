@@ -63,6 +63,44 @@ def seal(payload: dict) -> dict:
     }
 
 
+def seal_text(value: str | None) -> str | None:
+    """Seal a short string column (e.g. the chat title) the same way.
+
+    Stored form: ``enc1:<b64 nonce>:<b64 ciphertext>``. No compression —
+    titles are tiny. Plaintext passthrough without a key, like ``seal``.
+    """
+    if value is None:
+        return None
+    key = _key()
+    if key is None:
+        return value
+    nonce = os.urandom(12)
+    ciphertext = AESGCM(key).encrypt(nonce, value.encode("utf-8"), None)
+    return (
+        "enc1:"
+        + base64.b64encode(nonce).decode("ascii")
+        + ":"
+        + base64.b64encode(ciphertext).decode("ascii")
+    )
+
+
+def unseal_text(stored: str | None) -> str | None:
+    """Inverse of ``seal_text``; legacy plaintext values pass through."""
+    if stored is None or not stored.startswith("enc1:"):
+        return stored
+    key = _key()
+    if key is None:
+        raise SealedPayloadError("Encrypted value but SYNC_ENC_KEY is unset.")
+    try:
+        _, n, d = stored.split(":", 2)
+        plaintext = AESGCM(key).decrypt(
+            base64.b64decode(n), base64.b64decode(d), None
+        )
+        return plaintext.decode("utf-8")
+    except (InvalidTag, KeyError, ValueError) as exc:
+        raise SealedPayloadError(str(exc)) from exc
+
+
 def unseal(stored: dict) -> dict:
     """Inverse of ``seal``; legacy plaintext rows pass through untouched."""
     if not (isinstance(stored, dict) and stored.get("enc") == 1):
