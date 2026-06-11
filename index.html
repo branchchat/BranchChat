@@ -6,6 +6,25 @@
     <link rel="apple-touch-icon" href="/favicon.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#ffffff" />
+    <!-- Apply the saved (or system) theme before first paint so dark-mode
+         users don't see a white flash. Mirrors src/lib/theme.ts. -->
+    <script>
+      (function () {
+        try {
+          var t = localStorage.getItem("branchchat-theme");
+          if (t !== "light" && t !== "dark") {
+            t = window.matchMedia("(prefers-color-scheme: dark)").matches
+              ? "dark"
+              : "light";
+          }
+          if (t === "dark") {
+            document.documentElement.classList.add("dark");
+            var m = document.querySelector('meta[name="theme-color"]');
+            if (m) m.setAttribute("content", "#181818");
+          }
+        } catch (e) {}
+      })();
+    </script>
     <meta name="google-site-verification" content="CSwz4D3_RLX9dKCdgO9fLXkNBRSkNaAmkann0o4z6vM" />
     <meta name="msvalidate.01" content="FE13E2A9511A16A5A7F97598175DBA74" />
     <title>BranchChat - Branch, Compare, and Map AI Conversations</title>
