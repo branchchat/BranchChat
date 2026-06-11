@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { Columns2, GitBranch, Link2 } from "lucide-react";
+import { Columns2, GitBranch, Layers, Link2 } from "lucide-react";
 import { motion, useReducedMotion } from "motion/react";
 
 import { Brand } from "@/components/landing/Brand";
@@ -47,6 +47,11 @@ const capabilities = [
     icon: Link2,
     title: "Keeps the context",
     body: "BranchChat remembers the important parts across every branch, so you never have to repeat yourself.",
+  },
+  {
+    icon: Layers,
+    title: "Pick the best AI",
+    body: "Switch between top AI models and use the right one for each task — all in the same conversation.",
   },
 ];
 
@@ -128,7 +133,7 @@ export function Landing() {
 
       {/* ── Capabilities (hairline-divided row, reveal on scroll) ────────── */}
       <section className="mx-auto max-w-5xl px-6 py-16 sm:py-24">
-        <div className="grid gap-px overflow-hidden rounded-2xl border bg-border sm:grid-cols-3">
+        <div className="grid grid-cols-2 gap-px overflow-hidden rounded-2xl border bg-border sm:grid-cols-4">
           {capabilities.map((c, i) => (
             <Reveal key={c.title} delay={i * 0.08}>
               <div className="h-full bg-background p-6 transition-colors hover:bg-secondary/40 sm:p-7">
