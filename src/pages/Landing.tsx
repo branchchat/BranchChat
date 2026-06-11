@@ -36,17 +36,17 @@ const capabilities = [
   {
     icon: GitBranch,
     title: "Branch anywhere",
-    body: "Fork from any message to explore an alternative — without losing the original thread.",
+    body: "Pick up from any point in a conversation and try a different angle — without losing where you started.",
   },
   {
     icon: Columns2,
-    title: "Compare paths",
-    body: "Put two branches side by side and see which answer actually wins.",
+    title: "Compare answers",
+    body: "See two responses side by side and decide which one actually works better for you.",
   },
   {
     icon: Link2,
-    title: "Link context",
-    body: "Pull context across branches so the model remembers what matters.",
+    title: "Keeps the context",
+    body: "BranchChat remembers the important parts across every branch, so you never have to repeat yourself.",
   },
 ];
 
@@ -103,8 +103,9 @@ export function Landing() {
             className="bc-rise mx-auto mt-5 max-w-xl text-base text-muted-foreground sm:text-lg"
             style={{ animationDelay: "0.2s" }}
           >
-            BranchChat turns AI conversations into a visual tree — explore
-            alternatives, compare paths, and never lose a thread.
+            Most AI chats trap you in one long conversation. BranchChat lets
+            you explore different directions side by side — so you can try
+            ideas, compare answers, and never lose a good one.
           </p>
 
           <div
