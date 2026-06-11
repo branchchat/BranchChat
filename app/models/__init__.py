@@ -5,6 +5,7 @@ Alembic autogenerate and for test schema creation.
 """
 
 from app.models.email_token import EmailToken
+from app.models.feedback import Feedback
 from app.models.login_attempt import LoginAttempt
 from app.models.share import ShareSnapshot
 from app.models.synced_chat import SyncedChat
@@ -14,6 +15,7 @@ from app.models.waitlist import WaitlistEntry
 
 __all__ = [
     "EmailToken",
+    "Feedback",
     "LoginAttempt",
     "ShareSnapshot",
     "SyncedChat",

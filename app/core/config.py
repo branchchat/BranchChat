@@ -145,6 +145,10 @@ class Settings(BaseSettings):
     # no signup alerts. The new user's verification email is unaffected.
     SIGNUP_ALERT_EMAILS: Annotated[list[str], NoDecode] = []
 
+    # Founders who get an email when a tester submits feedback (CSV). Unset =
+    # feedback is still stored in the DB, just not emailed.
+    FEEDBACK_ALERT_EMAILS: Annotated[list[str], NoDecode] = []
+
     # -- Email (Resend) + token TTLs ----------------------------------------
     RESEND_API_KEY: str | None = None
     RESEND_FROM_EMAIL: str | None = None
@@ -191,7 +195,11 @@ class Settings(BaseSettings):
     ENABLE_LEGACY_TREE_API: bool = False
 
     @field_validator(
-        "CORS_ORIGINS", "ALLOWED_HOSTS", "SIGNUP_ALERT_EMAILS", mode="before"
+        "CORS_ORIGINS",
+        "ALLOWED_HOSTS",
+        "SIGNUP_ALERT_EMAILS",
+        "FEEDBACK_ALERT_EMAILS",
+        mode="before",
     )
     @classmethod
     def _split_csv(cls, v: object) -> object:

@@ -21,17 +21,17 @@ from __future__ import annotations
 import asyncio
 import hmac
 import logging
-from datetime import datetime
+from datetime import date, datetime
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
 from pydantic import BaseModel, EmailStr
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.db.session import get_db, rls_tx
-from app.models import User, WaitlistEntry
-from app.services import analytics, email_service
+from app.models import Feedback, User, WaitlistEntry
+from app.services import analytics, email_service, identity
 from app.services import unsubscribe as unsub
 
 logger = logging.getLogger("branchchat.admin")
@@ -131,6 +131,132 @@ async def revoke_beta_user(
 ) -> AdminMessage:
     user = await _set_beta(session, req.email.strip().lower(), False)
     return AdminMessage(detail=f"{user.email} beta access revoked.")
+
+
+# --- feedback (read the notes testers sent) ----------------------------------
+
+
+class FeedbackItem(BaseModel):
+    email: str | None
+    category: str
+    message: str
+    path: str | None
+    chat_title: str | None
+    created_at: datetime
+
+
+class FeedbackListResponse(BaseModel):
+    feedback: list[FeedbackItem]
+
+
+@router.get("/feedback", response_model=FeedbackListResponse)
+async def list_feedback(
+    limit: int = 100,
+    session: AsyncSession = Depends(get_db),
+    _admin: None = Depends(require_admin),
+) -> FeedbackListResponse:
+    limit = max(1, min(limit, 500))
+    async with rls_tx(session, None):
+        rows = (
+            await session.execute(
+                select(
+                    Feedback.email,
+                    Feedback.category,
+                    Feedback.message,
+                    Feedback.path,
+                    Feedback.chat_title,
+                    Feedback.created_at,
+                )
+                .order_by(Feedback.created_at.desc())
+                .limit(limit)
+            )
+        ).all()
+    return FeedbackListResponse(
+        feedback=[
+            FeedbackItem(
+                email=r.email,
+                category=r.category,
+                message=r.message,
+                path=r.path,
+                chat_title=r.chat_title,
+                created_at=r.created_at,
+            )
+            for r in rows
+        ]
+    )
+
+
+# --- engagement (who's actually using the app) -------------------------------
+
+
+class EngagementRow(BaseModel):
+    email: str
+    is_beta_tester: bool
+    total_messages: int
+    active_days: int
+    last_active: date | None
+    created_at: datetime
+
+
+class EngagementResponse(BaseModel):
+    users: list[EngagementRow]
+
+
+@router.get("/engagement", response_model=EngagementResponse)
+async def engagement(
+    session: AsyncSession = Depends(get_db),
+    _admin: None = Depends(require_admin),
+) -> EngagementResponse:
+    """Per-account message activity, so you can see who's using the app.
+
+    usage_counters is keyed by an opaque HMAC of the user id (no PII), so we
+    map each account to its hash, then aggregate. Accounts with no messages
+    appear with zeros rather than being dropped.
+    """
+    async with rls_tx(session, None):
+        users = (
+            await session.execute(
+                select(
+                    User.id, User.email, User.is_beta_tester, User.created_at
+                ).order_by(User.created_at.asc())
+            )
+        ).all()
+
+        # hash → user, and the reverse so we can fold counts back onto emails.
+        hash_for = {u.id: identity.user_identity(str(u.id)) for u in users}
+        by_hash = {h: u for u, h in hash_for.items()}
+
+        agg = {}
+        if by_hash:
+            rows = (
+                await session.execute(
+                    text(
+                        "SELECT identity_hash, SUM(count) AS total, "
+                        "COUNT(DISTINCT day) AS days, MAX(day) AS last_day "
+                        "FROM usage_counters WHERE identity_hash = ANY(:hashes) "
+                        "GROUP BY identity_hash"
+                    ),
+                    {"hashes": list(by_hash.keys())},
+                )
+            ).all()
+            agg = {r.identity_hash: r for r in rows}
+
+    out: list[EngagementRow] = []
+    for u in users:
+        r = agg.get(hash_for[u.id])
+        out.append(
+            EngagementRow(
+                email=u.email,
+                is_beta_tester=u.is_beta_tester,
+                total_messages=int(r.total) if r else 0,
+                active_days=int(r.days) if r else 0,
+                last_active=r.last_day if r else None,
+                created_at=u.created_at,
+            )
+        )
+    # Most active first.
+    out.sort(key=lambda x: (x.total_messages, x.active_days), reverse=True)
+    return EngagementResponse(users=out)
 
 
 # --- marketing broadcast (the beta-launch announcement) ----------------------

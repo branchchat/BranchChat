@@ -258,6 +258,32 @@ async def send_new_signup_alert(new_email: str, recipients: list[str]) -> None:
         await _send(to, f"New signup: {new_email}", html)
 
 
+async def send_feedback_alert(
+    recipients: list[str],
+    *,
+    from_email: str,
+    category: str,
+    message: str,
+) -> None:
+    """Email the founders a tester's feedback (no-op without recipients)."""
+    if not recipients:
+        return
+    safe = (
+        message.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    )
+    html = _notice_layout(
+        heading=f"New feedback ({category})",
+        body_html=(
+            f'<p style="margin:0 0 12px;color:#71717a;">From '
+            f'<strong style="color:#18181b;">{from_email}</strong></p>'
+            f'<p style="margin:0;white-space:pre-wrap;">{safe}</p>'
+        ),
+    )
+    subject = f"Feedback ({category}) from {from_email}"
+    for to in recipients:
+        await _send(to, subject, html)
+
+
 async def send_beta_approved_email(to: str) -> None:
     """Sent when an admin grants beta access (see routers/admin.py)."""
     await _send(
