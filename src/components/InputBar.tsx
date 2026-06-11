@@ -61,6 +61,18 @@ export function InputBar() {
       inherited.model)
     : null;
 
+  // "Replying to": prefer the MODEL that wrote an assistant reply over the
+  // generic role word ("Replying to Claude Opus 4.8" beats "assistant reply");
+  // the role label stays as the fallback for user/root nodes and stub replies.
+  const replyingTo = selected
+    ? (selected.role === "assistant" && selected.provider && selected.model
+        ? (modelLabel(selected.provider, selected.model) ?? selected.model)
+        : (ROLE_LABEL[selected.role] ?? selected.role))
+    : null;
+  // The trailing "answers with X" only earns its place when it differs from
+  // the name already shown (a branch inheriting a different model override).
+  const showAnswersWith = !!inheritedLabel && inheritedLabel !== replyingTo;
+
   const submit = (mode: "continue" | "branch") => {
     const text = draft.trim();
     if (!text || !selected) return;
@@ -110,11 +122,9 @@ export function InputBar() {
           {selected ? (
             <>
               Replying to{" "}
-              <span className="font-medium text-foreground">
-                {ROLE_LABEL[selected.role] ?? selected.role}
-              </span>
+              <span className="font-medium text-foreground">{replyingTo}</span>
               {selected.branchLabel ? ` · ${selected.branchLabel}` : ""}
-              {inheritedLabel ? (
+              {showAnswersWith ? (
                 <>
                   {" · answers with "}
                   <span className="font-medium text-foreground">
