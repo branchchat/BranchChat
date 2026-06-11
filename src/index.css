@@ -145,6 +145,30 @@
   animation: node-flash 1.1s ease-out forwards;
 }
 
+/* React Flow's zoom controls + minimap ship a hard-coded light palette that
+   glows white over the dark canvas — repaint them with our theme tokens. */
+.dark .react-flow__controls {
+  box-shadow: 0 0 0 1px var(--border);
+}
+.dark .react-flow__controls-button {
+  background-color: var(--card);
+  border-bottom: 1px solid var(--border);
+  color: var(--foreground);
+  fill: var(--foreground);
+}
+.dark .react-flow__controls-button:hover {
+  background-color: var(--accent);
+}
+.dark .react-flow__controls-button svg {
+  fill: var(--foreground);
+}
+.dark .react-flow__minimap {
+  background-color: var(--card);
+}
+.dark .react-flow__minimap-mask {
+  fill: oklch(1 0 0 / 0.08);
+}
+
 /* ── Landing motion + helpers ───────────────────────────────────────────────
    Emil Kowalski's custom easings (built-in CSS easings are too weak), entrances
    never start from scale(0), only transform/opacity animate, reduced-motion safe. */

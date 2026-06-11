@@ -3,6 +3,7 @@ import { Routes, Route, Navigate, useLocation } from "react-router-dom"
 
 import { Landing } from "@/pages/Landing"
 import { CookieConsent } from "@/components/CookieConsent"
+import { FloatingThemeToggle } from "@/components/ThemeToggle"
 
 // SPA navigations keep the window scroll position, so clicking a footer link
 // at the bottom of the landing page opened /app scrolled past its own header
@@ -41,6 +42,11 @@ const VerifyEmail = lazy(() =>
 )
 
 function App() {
+  // /app carries the toggle in its sidebar footer (see Toolbar); everywhere
+  // else gets the floating corner button. Avoids the canvas zoom controls and
+  // sidebar fighting for the same bottom-left corner.
+  const { pathname } = useLocation()
+
   return (
     <>
       <ScrollToTop />
@@ -56,6 +62,7 @@ function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Suspense>
+      {pathname !== "/app" && <FloatingThemeToggle />}
       <CookieConsent />
     </>
   )
