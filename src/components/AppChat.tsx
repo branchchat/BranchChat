@@ -13,6 +13,7 @@ import { Link } from "react-router-dom"
 import { AuthControls } from "@/components/AuthControls"
 import { Canvas } from "@/components/Canvas"
 import { CompareView } from "@/components/CompareView"
+import { FeedbackButton } from "@/components/FeedbackButton"
 import { FocusView } from "@/components/FocusView"
 import { InputBar } from "@/components/InputBar"
 import { Toolbar } from "@/components/Toolbar"
@@ -60,6 +61,7 @@ export function AppChat() {
             <GitCompare className="size-4" />
             Compare
           </Button>
+          <FeedbackButton />
           <UsageMeter />
           <AuthControls />
           <Link
