@@ -14,7 +14,15 @@ security middleware.
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    HTTPException,
+    Request,
+    Response,
+    status,
+)
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -75,6 +83,7 @@ def _clear_auth_cookie(response: Response) -> None:
 @router.post("/signup", response_model=MessageOut, status_code=status.HTTP_201_CREATED)
 async def signup(
     req: SignupRequest,
+    background: BackgroundTasks,
     ctx: IdentityContext = Depends(request_identity),
     session: AsyncSession = Depends(get_db),
     _rl: None = Depends(auth_rate_limit),
@@ -91,15 +100,18 @@ async def signup(
                     session, created, "verify"
                 )
 
+    # Emails go out AFTER the response: the Resend round-trip was the largest
+    # single chunk of signup latency, and deferring it also keeps the two
+    # branches timing-identical (no enumeration signal from send duration).
     if created is not None and raw_verify is not None:
         uid = str(created.id)
         analytics.alias(ctx.anon_id, uid)  # attribute pre-signup activity
         analytics.identify(uid, {"email": email})
         analytics.capture(uid, "user_signed_up", {})
-        await email_service.send_verification_email(email, raw_verify)
+        background.add_task(email_service.send_verification_email, email, raw_verify)
     else:
         # Already registered (or a create race): identical response, helpful email.
-        await email_service.send_account_exists_email(email)
+        background.add_task(email_service.send_account_exists_email, email)
 
     return MessageOut(detail=_GENERIC_SIGNUP)
 
@@ -170,6 +182,7 @@ async def usage(
 @router.post("/request-password-reset", response_model=MessageOut)
 async def request_password_reset(
     req: RequestPasswordReset,
+    background: BackgroundTasks,
     session: AsyncSession = Depends(get_db),
     _rl: None = Depends(auth_rate_limit),
 ) -> MessageOut:
@@ -181,7 +194,8 @@ async def request_password_reset(
             await auth_service.invalidate_tokens(session, user.id, "reset")
             raw = await auth_service.create_email_token(session, user, "reset")
     if raw is not None:
-        await email_service.send_password_reset_email(email, raw)
+        # After the response (latency + no send-duration enumeration signal).
+        background.add_task(email_service.send_password_reset_email, email, raw)
     return MessageOut(detail=_GENERIC_RESET_REQUEST)
 
 
@@ -219,6 +233,7 @@ async def verify_email(
 
 @router.post("/resend-verification", response_model=MessageOut)
 async def resend_verification(
+    background: BackgroundTasks,
     user: User = Depends(current_user),
     session: AsyncSession = Depends(get_db),
     _rl: None = Depends(auth_rate_limit),
@@ -228,5 +243,5 @@ async def resend_verification(
     async with rls_tx(session, str(user.id)):
         await auth_service.invalidate_tokens(session, user.id, "verify")
         raw = await auth_service.create_email_token(session, user, "verify")
-    await email_service.send_verification_email(user.email, raw)
+    background.add_task(email_service.send_verification_email, user.email, raw)
     return MessageOut(detail="Verification email sent.")
