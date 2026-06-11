@@ -83,18 +83,17 @@ export function FeedbackButton() {
       <Dialog open={open} onOpenChange={reset}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Send feedback</DialogTitle>
+            <DialogTitle>{sent ? "Feedback sent" : "Send feedback"}</DialogTitle>
+            {/* After submitting, the prompt is replaced by the thank-you so the
+                "you're testing a beta" ask doesn't linger over a done state. */}
             <DialogDescription>
-              You're testing an early beta — tell us what's broken or what you
-              wish it did. It helps a lot.
+              {sent
+                ? "Thanks — got it. We read every note."
+                : "You're testing an early beta — tell us what's broken or what you wish it did. It helps a lot."}
             </DialogDescription>
           </DialogHeader>
 
-          {sent ? (
-            <p className="py-2 text-sm text-muted-foreground">
-              Thanks — got it. We read every note.
-            </p>
-          ) : !canSend ? (
+          {sent ? null : !canSend ? (
             // Respect the analytics opt-out instead of dropping the feedback.
             <div className="space-y-3 py-1 text-sm text-muted-foreground">
               <p>
