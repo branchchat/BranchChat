@@ -1,28 +1,24 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 
-// Mutable mock of the PostHog client so each test can vary opt-in state.
-const capture = vi.fn();
-let optedIn = true;
-vi.mock("@posthog/react", () => ({
-  usePostHog: () => ({
-    capture,
-    has_opted_in_capturing: () => optedIn,
-  }),
+// Mock the backend client: feedback now posts to /api/feedback.
+const submitFeedback = vi.fn();
+vi.mock("@/lib/api", () => ({
+  isBackendConfigured: () => true,
+  submitFeedback: (...args: unknown[]) => submitFeedback(...args),
 }));
 
 import { FeedbackButton } from "@/components/FeedbackButton";
-import { FEEDBACK_EVENT } from "@/lib/feedback";
 
 beforeEach(() => {
-  capture.mockClear();
-  optedIn = true;
+  submitFeedback.mockReset();
+  submitFeedback.mockResolvedValue(undefined);
 });
 
 describe("FeedbackButton", () => {
-  it("captures a structured feedback event when opted in", () => {
+  it("posts feedback to the backend and shows the sent state", async () => {
     render(<FeedbackButton />);
     fireEvent.click(screen.getByRole("button", { name: /feedback/i }));
 
@@ -31,27 +27,31 @@ describe("FeedbackButton", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: /send feedback/i }));
 
-    expect(capture).toHaveBeenCalledWith(
-      FEEDBACK_EVENT,
-      expect.objectContaining({
-        category: "idea",
-        message: "loving the branching",
-        source: "beta-widget",
-      }),
+    await waitFor(() =>
+      expect(submitFeedback).toHaveBeenCalledWith(
+        expect.objectContaining({
+          category: "idea",
+          message: "loving the branching",
+        }),
+      ),
     );
-    // Success state replaces the form.
-    expect(screen.getByText(/Thanks — got it/)).toBeInTheDocument();
+    // After submit, the prompt is replaced by the thank-you and the title flips.
+    expect(await screen.findByText(/Thanks — got it/)).toBeInTheDocument();
+    expect(screen.getByText("Feedback sent")).toBeInTheDocument();
+    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
   });
 
-  it("does not capture when analytics is opted out; offers cookie settings", () => {
-    optedIn = false;
+  it("surfaces an error and stays on the form when the post fails", async () => {
+    submitFeedback.mockRejectedValue(new Error("Request failed (HTTP 401)."));
     render(<FeedbackButton />);
     fireEvent.click(screen.getByRole("button", { name: /feedback/i }));
+    fireEvent.change(screen.getByRole("textbox"), {
+      target: { value: "broken" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /send feedback/i }));
 
-    expect(
-      screen.getByRole("button", { name: /open cookie settings/i }),
-    ).toBeInTheDocument();
-    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
-    expect(capture).not.toHaveBeenCalled();
+    expect(await screen.findByText(/Request failed/)).toBeInTheDocument();
+    // Still on the form (not the sent state).
+    expect(screen.getByRole("textbox")).toBeInTheDocument();
   });
 });

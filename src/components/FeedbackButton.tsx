@@ -1,14 +1,10 @@
-// "Feedback" button + dialog for beta testers. Submits to PostHog as a
-// structured `feedback_submitted` event with light context (current chat,
-// whether they're signed in).
-//
-// Consent-aware: PostHog starts opted out (see main.tsx), so if a tester has
-// analytics off we don't silently drop their feedback — we point them at cookie
-// settings instead of capturing.
+// "Feedback" button + dialog for beta testers. Submits to our own backend
+// (POST /api/feedback) so notes are always captured — independent of the
+// tester's analytics consent. The widget lives behind the account gate, so
+// requests carry the session cookie.
 
 import { useState } from "react";
 import { MessageSquarePlus } from "lucide-react";
-import { usePostHog } from "@posthog/react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -19,32 +15,22 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { openCookieSettings } from "@/lib/consent";
-import {
-  buildFeedbackProperties,
-  CATEGORY_LABELS,
-  FEEDBACK_EVENT,
-  type FeedbackCategory,
-} from "@/lib/feedback";
+import { isBackendConfigured, submitFeedback } from "@/lib/api";
+import { CATEGORY_LABELS, type FeedbackCategory } from "@/lib/feedback";
 import { cn } from "@/lib/utils";
-import { useAuthStore } from "@/store/authStore";
 import { useChatStore } from "@/store/chatStore";
 
 const CATEGORIES = Object.keys(CATEGORY_LABELS) as FeedbackCategory[];
 
 export function FeedbackButton() {
-  const posthog = usePostHog();
-  const user = useAuthStore((s) => s.user);
   const chatTitle = useChatStore((s) => s.chats[s.activeChatId]?.title);
 
   const [open, setOpen] = useState(false);
   const [category, setCategory] = useState<FeedbackCategory>("idea");
   const [message, setMessage] = useState("");
   const [sent, setSent] = useState(false);
-
-  // PostHog is opt-out by default; only capture when the tester has accepted
-  // analytics. has_opted_in_capturing is false in stub/dev (no key) too.
-  const canSend = posthog?.has_opted_in_capturing() ?? false;
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const reset = (nextOpen: boolean) => {
     setOpen(nextOpen);
@@ -52,20 +38,37 @@ export function FeedbackButton() {
       setMessage("");
       setCategory("idea");
       setSent(false);
+      setError(null);
+      setBusy(false);
     }
   };
 
-  const submit = () => {
-    if (!message.trim() || !canSend) return;
-    posthog?.capture(
-      FEEDBACK_EVENT,
-      buildFeedbackProperties(category, message, {
-        path: window.location.pathname,
-        chatTitle,
-        hasAccount: Boolean(user),
-      }),
-    );
-    setSent(true);
+  const submit = async () => {
+    const text = message.trim();
+    if (!text || busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      // Local-first dev / e2e (no backend): accept the note so the flow is
+      // testable without a server.
+      if (isBackendConfigured()) {
+        await submitFeedback({
+          category,
+          message: text,
+          path: window.location.pathname,
+          chat_title: chatTitle,
+        });
+      }
+      setSent(true);
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Couldn't send that — please try again.",
+      );
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -93,18 +96,7 @@ export function FeedbackButton() {
             </DialogDescription>
           </DialogHeader>
 
-          {sent ? null : !canSend ? (
-            // Respect the analytics opt-out instead of dropping the feedback.
-            <div className="space-y-3 py-1 text-sm text-muted-foreground">
-              <p>
-                Feedback is sent through our privacy-first analytics, which is
-                currently off. Turn on analytics to send feedback.
-              </p>
-              <Button variant="outline" size="sm" onClick={openCookieSettings}>
-                Open cookie settings
-              </Button>
-            </div>
-          ) : (
+          {sent ? null : (
             <div className="space-y-4">
               <div className="flex gap-1.5">
                 {CATEGORIES.map((c) => (
@@ -136,12 +128,14 @@ export function FeedbackButton() {
                 }
               />
 
+              {error && <p className="text-xs text-destructive">{error}</p>}
+
               <div className="flex items-center justify-between">
                 <span className="text-xs text-muted-foreground">
                   We attach your current chat for context.
                 </span>
-                <Button onClick={submit} disabled={!message.trim()}>
-                  Send feedback
+                <Button onClick={submit} disabled={!message.trim() || busy}>
+                  {busy ? "Sending…" : "Send feedback"}
                 </Button>
               </div>
             </div>

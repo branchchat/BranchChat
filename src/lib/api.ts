@@ -404,6 +404,22 @@ export async function resendVerification(): Promise<string> {
   return res.detail ?? "Verification email sent.";
 }
 
+// --- in-app feedback --------------------------------------------------------
+// Stored server-side (cookie auth) so notes always reach us, regardless of the
+// tester's analytics choice. The widget lives behind the account gate.
+
+export interface FeedbackPayload {
+  category: "bug" | "idea" | "other";
+  message: string;
+  path?: string;
+  chat_title?: string;
+}
+
+// POST /api/feedback — throws ChatApiError on failure (surfacing the detail).
+export async function submitFeedback(payload: FeedbackPayload): Promise<void> {
+  await postAuth<{ detail?: string }>("/api/feedback", payload);
+}
+
 // --- server-side sync (optional, signed-in users) ---------------------------
 // The app stays local-first; /api/sync is a per-chat backup/sync target.
 // Payloads are the same versioned envelope as session export/import; conflict
