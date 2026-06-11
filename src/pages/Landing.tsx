@@ -186,10 +186,10 @@ export function Landing() {
               Cookie settings
             </button>
             <Link
-              to="/app"
+              to="/app?auth=signin"
               className="transition-colors hover:text-foreground"
             >
-              Developer access →
+              Sign in →
             </Link>
           </nav>
         </div>

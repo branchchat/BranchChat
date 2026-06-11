@@ -59,7 +59,7 @@ export function ResetPassword() {
       <AuthPage title="Password reset">
         <p className="text-muted-foreground">{done}</p>
         <Button asChild className="mt-4 w-full">
-          <Link to="/app">Continue to sign in</Link>
+          <Link to="/app?auth=signin">Continue to sign in</Link>
         </Button>
       </AuthPage>
     );

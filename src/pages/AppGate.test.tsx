@@ -17,7 +17,9 @@ vi.mock("@/components/AppChat", () => ({
   AppChat: () => <div data-testid="app-chat" />,
 }));
 vi.mock("@/components/AuthDialog", () => ({
-  AuthDialog: () => <div data-testid="auth-dialog" />,
+  AuthDialog: ({ open, initialMode }: { open: boolean; initialMode?: string }) => (
+    <div data-testid="auth-dialog" data-open={open} data-mode={initialMode} />
+  ),
 }));
 
 import { AppGate } from "@/pages/AppGate";
@@ -30,9 +32,9 @@ function setAuth(user: object | null) {
   } as never);
 }
 
-function renderGate() {
+function renderGate(initialEntry = "/app") {
   return render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={[initialEntry]}>
       <AppGate />
     </MemoryRouter>,
   );
@@ -65,6 +67,23 @@ describe("AppGate (account-gated beta)", () => {
     expect(screen.getByText("You're on the list")).toBeInTheDocument();
     expect(screen.getByText(/tester@example\.com/)).toBeInTheDocument();
     expect(screen.queryByTestId("app-chat")).not.toBeInTheDocument();
+  });
+
+  it("auto-opens the auth dialog on the form named by ?auth= (deep link from /beta)", () => {
+    setAuth(null);
+    renderGate("/app?auth=signup");
+    const dialog = screen.getByTestId("auth-dialog");
+    expect(dialog).toHaveAttribute("data-open", "true");
+    expect(dialog).toHaveAttribute("data-mode", "signup");
+  });
+
+  it("does not auto-open the dialog without the ?auth= param", () => {
+    setAuth(null);
+    renderGate();
+    expect(screen.getByTestId("auth-dialog")).toHaveAttribute(
+      "data-open",
+      "false",
+    );
   });
 
   it("renders the app for approved accounts", () => {

@@ -51,14 +51,19 @@ const COPY: Record<
 export function AuthDialog({
   open,
   onOpenChange,
+  initialMode = "signin",
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  // Which form the dialog starts on (deep links: /beta's "Create your
+  // account" opens straight to signup). The in-dialog switch links still
+  // work; this only picks the starting mode.
+  initialMode?: "signin" | "signup";
 }) {
   const login = useAuthStore((s) => s.login);
   const signup = useAuthStore((s) => s.signup);
 
-  const [mode, setMode] = useState<Mode>("signin");
+  const [mode, setMode] = useState<Mode>(initialMode);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);

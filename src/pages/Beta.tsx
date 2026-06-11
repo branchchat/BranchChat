@@ -1,9 +1,12 @@
 // /beta — beta-tester recruitment page.
 //
 // A focused surface (separate from the marketing landing) you can link from
-// outreach / social. One CTA: create an account at /app, which lands in the
-// pending-approval state until a founder approves it via /api/admin/beta.
-// (The general waitlist still lives on the landing page.)
+// outreach / social. Primary CTA creates an account (lands in the
+// pending-approval state until a founder approves it via /api/admin/beta);
+// a secondary "Sign in" covers returning testers — both deep-link to
+// /app?auth=… which opens the auth dialog on the right form, and a signed-in
+// approved tester goes straight to the app. (The general waitlist still
+// lives on the landing page.)
 
 import { Link } from "react-router-dom";
 import { Check, GitBranch, MessageSquarePlus, Sparkles } from "lucide-react";
@@ -84,11 +87,20 @@ export function Beta() {
             style={{ animationDelay: "0.24s" }}
           >
             <Link
-              to="/app"
+              to="/app?auth=signup"
               className="bc-press inline-flex h-11 w-full max-w-xs items-center justify-center rounded-xl bg-foreground text-sm font-medium text-background shadow-sm transition-colors hover:bg-foreground/90"
             >
               Create your account
             </Link>
+            <p className="mt-3 text-sm text-muted-foreground">
+              Already have an account?{" "}
+              <Link
+                to="/app?auth=signin"
+                className="font-medium text-foreground underline-offset-4 hover:underline"
+              >
+                Sign in
+              </Link>
+            </p>
           </div>
         </div>
 

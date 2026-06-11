@@ -9,7 +9,7 @@
 // are stubbed there, so there are no tokens to protect.
 
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { Clock, LogOut, RefreshCw } from "lucide-react";
 
 import { AppChat } from "@/components/AppChat";
@@ -48,7 +48,16 @@ export function AppGate() {
   const hydrated = useAuthStore((s) => s.hydrated);
   const hydrate = useAuthStore((s) => s.hydrate);
   const logout = useAuthStore((s) => s.logout);
-  const [authOpen, setAuthOpen] = useState(false);
+  // Deep link from /beta or the landing footer: /app?auth=signup|signin
+  // opens the auth dialog on that form immediately (captured once at mount,
+  // so closing the dialog doesn't reopen it).
+  const [searchParams] = useSearchParams();
+  const [authMode] = useState<"signin" | "signup">(() =>
+    searchParams.get("auth") === "signup" ? "signup" : "signin",
+  );
+  const [authOpen, setAuthOpen] = useState(
+    () => searchParams.get("auth") === "signup" || searchParams.get("auth") === "signin",
+  );
   const [checking, setChecking] = useState(false);
 
   // Resolve the session before deciding which gate state to show.
@@ -79,7 +88,11 @@ export function AppGate() {
         <Button className="mt-6 w-full" onClick={() => setAuthOpen(true)}>
           Sign in or create account
         </Button>
-        <AuthDialog open={authOpen} onOpenChange={setAuthOpen} />
+        <AuthDialog
+          open={authOpen}
+          onOpenChange={setAuthOpen}
+          initialMode={authMode}
+        />
       </GateShell>
     );
   }
