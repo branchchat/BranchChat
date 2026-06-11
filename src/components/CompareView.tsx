@@ -11,6 +11,7 @@ import { GitCompare, X } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Markdown } from "@/components/Markdown";
 import {
   divergenceIndex,
   listLeaves,
@@ -57,9 +58,13 @@ function Bubble({ node, shared }: { node: ChatNode; shared: boolean }) {
           </span>
         )}
       </div>
-      <p className="whitespace-pre-wrap">
-        {node.content || <span className="italic">Empty</span>}
-      </p>
+      {node.role === "assistant" && node.content ? (
+        <Markdown>{node.content}</Markdown>
+      ) : (
+        <p className="whitespace-pre-wrap">
+          {node.content || <span className="italic">Empty</span>}
+        </p>
+      )}
     </div>
   );
 }

@@ -12,7 +12,7 @@ import { BookOpen, X } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import { Markdown } from "@/components/Markdown";
 import { useChatStore } from "@/store/chatStore";
 import type { ChatRole } from "@/types/chat";
 
@@ -101,18 +101,17 @@ export function FocusView() {
                   </span>
                 ))}
               </div>
-              <p
-                className={cn(
-                  "leading-relaxed whitespace-pre-wrap",
-                  node.role === "assistant"
-                    ? "text-[15px] text-foreground"
-                    : "text-[15px] text-foreground/90",
-                )}
-              >
-                {node.content || (
-                  <span className="text-muted-foreground italic">Empty</span>
-                )}
-              </p>
+              {node.role === "assistant" && node.content ? (
+                <Markdown className="text-[15px] [&]:text-[15px]">
+                  {node.content}
+                </Markdown>
+              ) : (
+                <p className="text-[15px] leading-relaxed whitespace-pre-wrap text-foreground/90">
+                  {node.content || (
+                    <span className="text-muted-foreground italic">Empty</span>
+                  )}
+                </p>
+              )}
               {node.comments?.map((c) => (
                 <p
                   key={c.id}

@@ -18,6 +18,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Markdown } from "@/components/Markdown";
 import { NodeAnnotations } from "@/components/NodeAnnotations";
 import { modelLabel } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -56,7 +57,7 @@ function ChatNodeComponent({ data, selected }: NodeProps<ChatFlowNode>) {
   // fixed, so a node can't grow in place without overlapping its children).
   // When the clamp actually cuts something off, offer "Show more", which
   // expands this message into a large popup — full text, scrollable.
-  const contentRef = useRef<HTMLParagraphElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
   const [clamped, setClamped] = useState(false);
   const [expanded, setExpanded] = useState(false);
   useEffect(() => {
@@ -117,17 +118,32 @@ function ChatNodeComponent({ data, selected }: NodeProps<ChatFlowNode>) {
             <p className="text-sm text-muted-foreground italic">Thinking…</p>
           ) : (
             <>
-              <p
+              {/* Markdown for assistant replies (the system prompt asks for
+                  it); plain text for user/system — people expect their own
+                  asterisks untouched. max-h clamp instead of line-clamp so
+                  block elements (lists, code) clamp too; the ref measures
+                  overflow either way. */}
+              <div
                 ref={contentRef}
-                className={cn(
-                  "line-clamp-6 text-sm whitespace-pre-wrap text-foreground",
-                  node.isError && "text-destructive",
-                )}
+                className="max-h-[7.5rem] overflow-hidden"
               >
-                {node.content || (
-                  <span className="text-muted-foreground italic">Empty</span>
+                {node.role === "assistant" && !node.isError && node.content ? (
+                  <Markdown>{node.content}</Markdown>
+                ) : (
+                  <p
+                    className={cn(
+                      "text-sm whitespace-pre-wrap text-foreground",
+                      node.isError && "text-destructive",
+                    )}
+                  >
+                    {node.content || (
+                      <span className="text-muted-foreground italic">
+                        Empty
+                      </span>
+                    )}
+                  </p>
                 )}
-              </p>
+              </div>
               {clamped && (
                 <button
                   type="button"
@@ -226,9 +242,13 @@ function ChatNodeComponent({ data, selected }: NodeProps<ChatFlowNode>) {
             </DialogTitle>
           </DialogHeader>
           <div className="min-h-0 overflow-y-auto pr-1">
-            <p className="text-sm leading-relaxed whitespace-pre-wrap">
-              {node.content}
-            </p>
+            {node.role === "assistant" ? (
+              <Markdown>{node.content}</Markdown>
+            ) : (
+              <p className="text-sm leading-relaxed whitespace-pre-wrap">
+                {node.content}
+              </p>
+            )}
           </div>
         </DialogContent>
       </Dialog>

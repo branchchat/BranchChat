@@ -47,7 +47,10 @@ export function Canvas() {
     chatId: string;
     map: Record<string, { x: number; y: number }>;
   }>({ chatId: "", map: {} });
-  const dragOverrides = drag.chatId === activeChatId ? drag.map : {};
+  const dragOverrides = useMemo(
+    () => (drag.chatId === activeChatId ? drag.map : {}),
+    [drag, activeChatId],
+  );
   const rfRef = useRef<ReactFlowInstance<ChatFlowNode, Edge> | null>(null);
   // Node to briefly pulse after a search-result open ({id, ts}); ts keys the
   // animation so re-opening the same node replays it.
