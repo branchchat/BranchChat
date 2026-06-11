@@ -192,12 +192,14 @@ const ChatNodeBody = memo(function ChatNodeBody({
                   block elements (lists, code) clamp too; the ref measures
                   overflow either way. Overflowing content scrolls IN PLACE:
                   `nowheel` makes React Flow hand the wheel to this container
-                  instead of zooming the canvas, and `nodrag` keeps a
-                  scrollbar drag from moving the node (drag from the header
-                  or card edges instead). */}
+                  instead of zooming the canvas, and `nodrag` keeps drags in
+                  the text from moving the node (drag from the header or card
+                  edges instead). The vertical scrollbar is hidden on purpose
+                  (wheel/touch still scroll; "Show more" covers the rest) —
+                  code blocks keep their own horizontal scrollbars. */}
               <div
                 ref={contentRef}
-                className="nodrag nowheel max-h-[12rem] overflow-y-auto [scrollbar-width:thin] [overflow-anchor:none]"
+                className="nodrag nowheel max-h-[12rem] overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [overflow-anchor:none]"
               >
                 {node.role === "assistant" && !node.isError && node.content ? (
                   <Markdown>{node.content}</Markdown>
