@@ -13,10 +13,11 @@ export interface XYPosition {
 }
 
 // Approximate node footprint used for spacing. The real rendered height
-// varies with content; Y_GAP leaves room for typical node heights.
+// varies with content; Y_GAP must clear a fully-clamped node (header +
+// 7.5rem content clamp + footer row) with breathing room below it.
 export const NODE_WIDTH = 280;
-const X_GAP = 48;
-const Y_GAP = 220;
+export const X_GAP = 48;
+export const Y_GAP = 300;
 
 // Returns a position keyed by node id. Leaves are packed left-to-right; each
 // internal node is centered over the span of its children.

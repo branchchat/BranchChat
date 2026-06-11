@@ -57,16 +57,15 @@ export function Canvas() {
   const [flash, setFlash] = useState<{ id: string; ts: number } | null>(null);
   const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const { nodes, edges } = useMemo(() => {
+  const { nodes: layoutNodes, edges } = useMemo(() => {
     if (!chat) return { nodes: [] as ChatFlowNode[], edges: [] as Edge[] };
 
     const positions = computeTreeLayout(chat.nodes, chat.rootId);
     const flowNodes: ChatFlowNode[] = Object.values(chat.nodes).map((n) => ({
       id: n.id,
       type: "chat",
-      // Drag-in-progress beats the stored position beats the layout slot.
-      position:
-        dragOverrides[n.id] ?? n.position ?? positions[n.id] ?? { x: 0, y: 0 },
+      // Stored position beats the layout slot.
+      position: n.position ?? positions[n.id] ?? { x: 0, y: 0 },
       data: {
         node: n,
         flashKey: flash && flash.id === n.id ? flash.ts : undefined,
@@ -83,7 +82,19 @@ export function Canvas() {
       }));
 
     return { nodes: flowNodes, edges: flowEdges };
-  }, [chat, flash, dragOverrides]);
+  }, [chat, flash]);
+
+  // Drag-in-progress positions are layered on in a second pass that reuses
+  // the untouched node objects. Rebuilding every node per pointer move (the
+  // old single memo) gave each one a fresh `data` object each frame, defeating
+  // ChatNode's memo and re-running the Markdown renderer constantly — the
+  // text visibly blinked while dragging.
+  const nodes = useMemo(() => {
+    if (Object.keys(dragOverrides).length === 0) return layoutNodes;
+    return layoutNodes.map((n) =>
+      dragOverrides[n.id] ? { ...n, position: dragOverrides[n.id] } : n,
+    );
+  }, [layoutNodes, dragOverrides]);
 
   const onNodeClick = useCallback(
     (_event: React.MouseEvent, node: FlowNode) => selectNode(node.id),

@@ -1,13 +1,15 @@
 // Tags + comments footer for a canvas node.
 //
 // Lets a user organize an exploration without spending quota (the product's
-// "tag/comment nodes" capability). Existing annotations always render; the
-// add-affordances reveal on node hover so idle nodes stay clean. Everything is
-// `nodrag` + stops propagation so typing/clicking doesn't pan the canvas or
-// re-trigger node selection. Rendered inline (no popover) to avoid portal/
-// z-index issues inside a React Flow node.
+// "tag/comment nodes" capability). One bottom row: an optional `action` slot
+// (ChatNode passes "Show more") on the left, tags + add-affordances pushed to
+// the right; existing comments list below the row. Add-affordances reveal on
+// node hover so idle nodes stay clean. Everything is `nodrag` + stops
+// propagation so typing/clicking doesn't pan the canvas or re-trigger node
+// selection. Rendered inline (no popover) to avoid portal/z-index issues
+// inside a React Flow node.
 
-import { useState, type KeyboardEvent } from "react";
+import { useState, type KeyboardEvent, type ReactNode } from "react";
 import { MessageSquarePlus, Tag, X } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -15,7 +17,13 @@ import { cn } from "@/lib/utils";
 import { useChatStore } from "@/store/chatStore";
 import type { ChatNode } from "@/types/chat";
 
-export function NodeAnnotations({ node }: { node: ChatNode }) {
+export function NodeAnnotations({
+  node,
+  action,
+}: {
+  node: ChatNode;
+  action?: ReactNode;
+}) {
   const addTag = useChatStore((s) => s.addTag);
   const removeTag = useChatStore((s) => s.removeTag);
   const addComment = useChatStore((s) => s.addComment);
@@ -59,59 +67,80 @@ export function NodeAnnotations({ node }: { node: ChatNode }) {
     }
   };
 
+  // Tag/comment affordances stay hidden until node hover when there's nothing
+  // to show. With no `action` either, the whole footer (border included) hides.
+  const affordancesIdle = !hasContent && !addingTag && !addingComment;
+  const hoverReveal =
+    "opacity-0 transition-opacity group-hover/node:opacity-100 focus-within:opacity-100";
+
   return (
     <div
       className={cn(
         "nodrag mt-2 flex flex-col gap-1.5 border-t pt-2",
-        // Idle, empty nodes stay clean — the footer appears on node hover.
-        !hasContent &&
-          !addingTag &&
-          !addingComment &&
-          "opacity-0 transition-opacity group-hover/node:opacity-100 focus-within:opacity-100",
+        !action && affordancesIdle && hoverReveal,
       )}
       onClick={(e) => e.stopPropagation()}
     >
-      {/* Tags */}
+      {/* Bottom row: action (Show more) left, tags + add-affordances right. */}
       <div className="flex flex-wrap items-center gap-1">
-        {tags.map((tag) => (
-          <Badge
-            key={tag}
-            variant="secondary"
-            className="group/tag gap-1 py-0 pr-1 pl-1.5 text-[10px] font-normal"
-          >
-            #{tag}
+        {action}
+        <div
+          className={cn(
+            "ml-auto flex min-w-0 flex-wrap items-center justify-end gap-1",
+            action && affordancesIdle && hoverReveal,
+          )}
+        >
+          {tags.map((tag) => (
+            <Badge
+              key={tag}
+              variant="secondary"
+              className="group/tag gap-1 py-0 pr-1 pl-1.5 text-[10px] font-normal"
+            >
+              #{tag}
+              <button
+                type="button"
+                aria-label={`Remove tag ${tag}`}
+                className="rounded-sm opacity-50 transition-opacity hover:opacity-100"
+                onClick={() => removeTag(node.id, tag)}
+              >
+                <X className="size-2.5" />
+              </button>
+            </Badge>
+          ))}
+
+          {addingTag ? (
+            <input
+              autoFocus
+              value={tagDraft}
+              onChange={(e) => setTagDraft(e.target.value)}
+              onKeyDown={onTagKey}
+              onBlur={commitTag}
+              placeholder="tag…"
+              aria-label="New tag"
+              className="h-5 w-20 rounded border bg-background px-1.5 text-[10px] outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            />
+          ) : (
             <button
               type="button"
-              aria-label={`Remove tag ${tag}`}
-              className="rounded-sm opacity-50 transition-opacity hover:opacity-100"
-              onClick={() => removeTag(node.id, tag)}
+              onClick={() => setAddingTag(true)}
+              className="flex items-center gap-0.5 rounded px-1 text-[10px] text-muted-foreground transition-colors hover:text-foreground"
             >
-              <X className="size-2.5" />
+              <Tag className="size-2.5" />
+              tag
             </button>
-          </Badge>
-        ))}
+          )}
 
-        {addingTag ? (
-          <input
-            autoFocus
-            value={tagDraft}
-            onChange={(e) => setTagDraft(e.target.value)}
-            onKeyDown={onTagKey}
-            onBlur={commitTag}
-            placeholder="tag…"
-            aria-label="New tag"
-            className="h-5 w-20 rounded border bg-background px-1.5 text-[10px] outline-none focus-visible:ring-1 focus-visible:ring-ring"
-          />
-        ) : (
-          <button
-            type="button"
-            onClick={() => setAddingTag(true)}
-            className="flex items-center gap-0.5 rounded px-1 text-[10px] text-muted-foreground transition-colors hover:text-foreground"
-          >
-            <Tag className="size-2.5" />
-            tag
-          </button>
-        )}
+          {!addingComment && (
+            <button
+              type="button"
+              onClick={() => setAddingComment(true)}
+              className="flex items-center gap-0.5 rounded px-1 text-[10px] text-muted-foreground transition-colors hover:text-foreground"
+            >
+              <MessageSquarePlus className="size-2.5" />
+              comment
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Comments */}
@@ -139,7 +168,7 @@ export function NodeAnnotations({ node }: { node: ChatNode }) {
         </ul>
       )}
 
-      {addingComment ? (
+      {addingComment && (
         <textarea
           autoFocus
           rows={2}
@@ -151,15 +180,6 @@ export function NodeAnnotations({ node }: { node: ChatNode }) {
           aria-label="New comment"
           className="resize-none rounded border bg-background px-1.5 py-1 text-[11px] outline-none focus-visible:ring-1 focus-visible:ring-ring"
         />
-      ) : (
-        <button
-          type="button"
-          onClick={() => setAddingComment(true)}
-          className="flex w-fit items-center gap-0.5 rounded px-1 text-[10px] text-muted-foreground transition-colors hover:text-foreground"
-        >
-          <MessageSquarePlus className="size-2.5" />
-          comment
-        </button>
       )}
     </div>
   );

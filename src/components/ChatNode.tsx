@@ -46,8 +46,19 @@ const ROLE_VARIANT: Record<
   assistant: "outline",
 };
 
-function ChatNodeComponent({ data, selected }: NodeProps<ChatFlowNode>) {
-  const { node, flashKey } = data;
+// The card itself, memoized on the node record. React Flow re-renders the
+// custom node component on every drag frame (its position props change);
+// without this inner memo that meant re-running the Markdown/KaTeX renderer
+// per frame for the dragged node — visible as blinking/disappearing text.
+const ChatNodeBody = memo(function ChatNodeBody({
+  node,
+  selected,
+  flashKey,
+}: {
+  node: ChatNodeType;
+  selected: boolean;
+  flashKey?: number;
+}) {
   const isRoot = node.parentId === null;
   const retryAssistant = useChatStore((s) => s.retryAssistant);
   const selectNode = useChatStore((s) => s.selectNode);
@@ -72,6 +83,21 @@ function ChatNodeComponent({ data, selected }: NodeProps<ChatFlowNode>) {
     node.role === "assistant" && !node.isLoading
       ? modelLabel(node.provider, node.model)
       : null;
+
+  // Sits in the footer row, same line as the tag/comment affordances.
+  const showMore = clamped ? (
+    <button
+      type="button"
+      className="nodrag inline-flex shrink-0 cursor-pointer items-center gap-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+      onClick={(e) => {
+        e.stopPropagation();
+        setExpanded(true);
+      }}
+    >
+      <Maximize2 className="size-3" />
+      Show more
+    </button>
+  ) : null;
 
   return (
     <div className="group/node relative" style={{ width: NODE_WIDTH }}>
@@ -144,19 +170,6 @@ function ChatNodeComponent({ data, selected }: NodeProps<ChatFlowNode>) {
                   </p>
                 )}
               </div>
-              {clamped && (
-                <button
-                  type="button"
-                  className="nodrag mt-1 inline-flex cursor-pointer items-center gap-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setExpanded(true);
-                  }}
-                >
-                  <Maximize2 className="size-3" />
-                  Show more
-                </button>
-              )}
             </>
           )}
 
@@ -191,9 +204,18 @@ function ChatNodeComponent({ data, selected }: NodeProps<ChatFlowNode>) {
             </Button>
           )}
 
-          {/* Tags + comments (organize without spending quota). Hidden while a
-              reply is streaming; the root system node isn't annotatable. */}
-          {!node.isLoading && !isRoot && <NodeAnnotations node={node} />}
+          {/* Footer row: Show more + tags + comment affordance share the same
+              line at the bottom of the node. Hidden while a reply is streaming;
+              the root node isn't annotatable, so it gets a plain footer with
+              just Show more when clamped. */}
+          {!node.isLoading &&
+            (isRoot ? (
+              showMore && (
+                <div className="nodrag mt-2 border-t pt-2">{showMore}</div>
+              )
+            ) : (
+              <NodeAnnotations node={node} action={showMore} />
+            ))}
         </CardContent>
 
         {/* Outgoing edge to children. */}
@@ -253,6 +275,18 @@ function ChatNodeComponent({ data, selected }: NodeProps<ChatFlowNode>) {
         </DialogContent>
       </Dialog>
     </div>
+  );
+});
+
+// React Flow entry point: forwards only the stable bits to the memoized body,
+// so per-frame drag re-renders stop at this shell.
+function ChatNodeComponent({ data, selected }: NodeProps<ChatFlowNode>) {
+  return (
+    <ChatNodeBody
+      node={data.node}
+      selected={selected ?? false}
+      flashKey={data.flashKey}
+    />
   );
 }
 

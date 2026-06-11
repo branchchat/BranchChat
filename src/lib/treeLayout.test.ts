@@ -1,11 +1,8 @@
 import { describe, expect, it } from "vitest";
 
-import { computeTreeLayout, NODE_WIDTH } from "@/lib/treeLayout";
+import { computeTreeLayout, NODE_WIDTH, X_GAP, Y_GAP } from "@/lib/treeLayout";
 import type { ChatNode } from "@/types/chat";
 
-// Layout constants mirrored from treeLayout.ts (X_GAP/Y_GAP are private there).
-const X_GAP = 48;
-const Y_GAP = 220;
 const X_STRIDE = NODE_WIDTH + X_GAP; // horizontal distance between adjacent leaves
 
 // Minimal node factory: only the fields the layout reads.
