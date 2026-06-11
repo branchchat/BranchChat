@@ -212,38 +212,19 @@ source of truth for the tree.
 
 ### P1 - UX Improvements
 
-- [ ] Revisit zoom/readability: when viewing many nodes, consider a minimap/outline/sidebar preview instead of relying only on canvas zoom.
-- [ ] Improve mobile workspace browser density and ensure search result cards do not squeeze important context.
-- [ ] Add an "open selected branch in focused view" mode for long conversations where full-tree zoom makes text hard to read.
+- [x] Revisit zoom/readability — a pannable/zoomable `<MiniMap>` is already in `Canvas.tsx`, and the new "Read" focused view (below) covers the readability angle.
+- [x] Improve mobile workspace browser density — the sidebar is now an overlay drawer on mobile (full-width canvas behind it, tap-to-dismiss, auto-close on select) instead of squeezing the canvas. Search result cards already truncate/clamp. Merged (#20).
+- [x] Add an "open selected branch in focused view" mode — the "Read" button opens a single-column reading view of the selected path (root→node). Merged (#19).
 - [ ] **@Jayden — auto-pan/center the canvas to the newest node after Send/Branch.** Found 2026-06-08 while verifying the prod chat fix: a new reply (or an `isError` node) is created and rendered correctly, but the viewport stays put, so on a tall tree the new node lands below the fold and looks like "nothing happened" (sent a message, got a real "Four" reply, but had to scroll to see it). Error handling itself is fine (failed sends flip to the red `isError` node with the backend `detail`). Just center/scroll-into-view the freshly added assistant node when it resolves.
 
-### P1 - SEO follow-ups (from the 2026-06-10 homepage SEO pass — @Jayden)
+### P1 - SEO standing rule (@everyone)
 
-Context: the homepage SEO is done + live (meta/OG/Twitter/canonical/JSON-LD in `index.html`,
-`robots.txt` + `sitemap.xml` + `og-image.png` in `public/`, GSC + Bing both verified, `www`
-301s to apex). What's left is in the frontend routing layer, which is your area.
-
-- [ ] ⚠️ **DO NOT remove the two verification meta tags in `index.html` head** —
+- ⚠️ **DO NOT remove the two verification meta tags in `index.html` head** —
   `<meta name="google-site-verification" ...>` and `<meta name="msvalidate.01" ...>`. Removing
   either drops our Google / Bing verification. Same for the `og:*`, `twitter:*`, `canonical`,
   `description`, and the JSON-LD `<script>` block — they're all static-head SEO, keep them.
-- [ ] **Per-route `<title>` + `<meta name="description">` for `/privacy`, `/terms`, `/app`.**
-  Right now every route inherits the homepage title ("BranchChat - Branch, Compare, and Map AI
-  Conversations") and description because it's an SPA and only `index.html` is served. Give each
-  route its own title/description (React 19 supports rendering `<title>`/`<meta>` straight from a
-  component, or use a tiny head effect — no react-helmet needed). Suggested:
-  - `/privacy` → "Privacy Policy · BranchChat"
-  - `/terms` → "Terms of Service · BranchChat"
-  - `/app` → keep it noindex-friendly; it's already `Disallow`ed in robots.txt, but a distinct
-    title like "BranchChat App" avoids the canonical homepage title leaking onto the gated app.
-  Leave the canonical tag pointing at `https://branch-chat.com/` on the homepage only — if you add
-  per-route canonicals later, make each self-referential.
-- [ ] **Code-split the main bundle for Core Web Vitals.** Production build warns the entry chunk is
-  ~861 kB (278 kB gzip), over Vite's 500 kB threshold. The landing page pulls in the whole app
-  (React Flow / `@xyflow/react`, motion, the chat shell) even though `/` only needs the marketing
-  page. Lazy-load the `/app` route (`React.lazy` + `Suspense` on the `AppGate`/`AppChat` import in
-  `App.tsx`) so React Flow & the chat code split out of the initial load — biggest LCP/INP win for
-  the landing page, which is the page that actually gets indexed.
+  _(The other two items from the 2026-06-10 SEO pass — per-route titles/descriptions and
+  code-splitting — are done, merged as #15.)_
 
 ### P1 - Social pipeline UI screenshots (@Jayden's Claude — please action)
 
@@ -257,11 +238,13 @@ Text/hook posts auto-generate branded cards, but "show the product" posts need
 **real UI screenshots**, and a good shot needs a populated canvas — which is your
 area. Please capture a small starter set:
 
-- [ ] **Canvas with a real branching conversation** (several nodes, ≥1 visible fork) — the hero shot
-- [ ] **Branch-compare view** (two endpoints side by side)
-- [ ] **A node with tags/comments or context links**
-- [ ] **Zoomed-out full tree** showing the scale of an exploration
+- [x] **Canvas with a real branching conversation** (several nodes, ≥1 visible fork) — the hero shot → `canvas-branching.png`
+- [x] **Branch-compare view** (two endpoints side by side) → `branch-compare.png`
+- [x] **A node with tags/comments or context links** → `node-detail.png`
+- [x] **Zoomed-out full tree** showing the scale of an exploration → `full-tree.png`
 - [ ] (optional) replay/history or any feature worth highlighting
+
+_All four pushed to `roshaan/social-pipeline` (`social-pipeline/assets/ui/`, `[skip ci]`, README table annotated). The branch-compare + node tags/comments **features** were built to make those two shots real — merged to `jayden/frontend` as #16 (tags/comments) and #17 (compare). @Roshaan: pull the branch to pick them into the pipeline._
 
 Details / naming convention / where they're used: see
 `social-pipeline/assets/ui/README.md`. **Drop the PNGs into
@@ -276,8 +259,8 @@ capturing these trivial.
 
 ### P1 - Tree Layout And Canvas
 
-- [ ] Verify branch creation from collapsed nodes and search navigation into collapsed subtrees.
-- [ ] Check that imported JSON sessions normalize node size/position fields consistently.
+- [x] ~~Verify branch creation from collapsed nodes and search navigation into collapsed subtrees.~~ **N/A in the rebuild** — node collapse isn't implemented (the `collapsedNodeIds` field exists but nothing uses it; the canvas renders the whole tree). Nothing to verify until/unless collapse is added.
+- [x] Check that imported JSON sessions normalize node size/position fields consistently — the new session import (#18) strips `position`/`width`/`height` (and `isLoading`/`isError`) on import so the canvas re-runs layout, keeping them consistent regardless of source.
 
 ### P1 - Security follow-ups (from 2026-06-06 audit, non-blocking for single-instance beta)
 
@@ -292,7 +275,7 @@ capturing these trivial.
 
 - [ ] Test login/signup/reset flows end-to-end against the deployed backend, including cross-site cookies.
 - [ ] Add a regression test for successful login after repeated `/api/auth/me` and `/api/auth/usage` calls.
-- [ ] Make quota UI copy match backend limits exactly in production.
+- [x] Make quota UI copy match backend limits exactly — the `UsageMeter` renders the backend's `used`/`limit`/`remaining` (and the coding bucket) verbatim; nothing hardcodes 10/50.
 - [ ] Decide whether email verification should gate authenticated daily quota or only account trust.
 
 ### P2 - Backend Cleanup
@@ -304,18 +287,25 @@ capturing these trivial.
 
 ### P2 - Persistence And Portability
 
-- [ ] Add explicit localStorage export/import versioning for future migrations.
-- [ ] Consider optional server-side sync for authenticated users, while preserving local-first behavior.
-- [ ] Add safeguards for very large local sessions before localStorage becomes fragile.
+- [x] Add explicit localStorage export/import versioning — chats export to a versioned JSON envelope (`branchchat-session` v1) and import validates the version + normalizes the tree. Merged (#18).
+- [ ] Consider optional server-side sync for authenticated users, while preserving local-first behavior. _(Deferred — a product/architecture decision that needs backend work; not a pure-frontend task. @Roshaan/human call.)_
+- [x] Add safeguards for very large local sessions — the Toolbar shows a "storage getting large — export to back up" nudge past ~3.5 MB of stored JSON, and export gives a durable backup. Merged (#18).
 
 ### P2 - Testing
 
-- [ ] Add React Testing Library coverage for `Toolbar` search result rendering. (`openNode` dispatch is already unit-tested at the store level; jsdom env + a `UsageMeter` RTL test landed in #10 — this is the remaining component-rendering piece.)
-- [ ] Add browser/e2e smoke test: load demo, search phrase, click result, assert node is selected/centered.
+- [x] Add React Testing Library coverage for `Toolbar` search result rendering — `Toolbar.test.tsx` covers matching result cards + `<mark>` highlight and the empty state. Merged (#20).
+- [ ] Add browser/e2e smoke test: load demo, search phrase, click result, assert node is selected/centered. _(Deferred — needs a committed browser-test runner (Playwright): a real infra add (heavy dep + CI download) for a beta, and `npm audit` = 0 is a project invariant. The same flows are currently smoke-checked per-PR via headless Chrome (puppeteer-core, not committed). Worth a deliberate yes before adding the runner.)_
 - [ ] Add backend contract tests for `/api/chat/gemini`, `/api/chat/summarize`, and `/api/share`.
 
 ## Recently Completed
 
+- [x] `/beta` recruitment page — a focused beta-signup surface (separate from the marketing landing) reusing the **existing waitlist pipe with `source="beta"`** (backend already stores `source`, so **no backend change**): signups land in the same Supabase `waitlist` table, tagged beta, queryable for invites. Matches the landing design (pill/headline/"what to expect" list), `usePageMeta` title, lazy-loaded route, and a "Beta access" link in the landing header. Parametrized the shared `WaitlistForm` (`cta`/`note` props). +1 test. **@Roshaan:** when convenient, add `/beta` to `public/sitemap.xml` on `roshaan/landing` (it's a public recruitment page, should be indexed; it's *not* in robots' disallow list, so crawlable by default). _(Done — added in the 2026-06-10 merge of jayden/frontend → roshaan/landing.)_
+- [x] Beta feedback widget (PostHog). A "Feedback" button in the `/app` header opens a dialog (Bug/Idea/Other + a message) that captures a structured **`feedback_submitted`** PostHog event with light context (`category`, `message`, `path`, `chat_title`, `has_account`, `source: "beta-widget"`). Consent-aware — if a tester has analytics off it points them to cookie settings instead of silently dropping the note. On-brand + discoverable; data lands in PostHog (no new backend). +4 tests. **@Roshaan (FYI, your PostHog):** the event is `feedback_submitted` — worth a saved Insight / a "Beta feedback" dashboard, and you can also stand up a no-code PostHog Survey alongside it if you want native survey UI/targeting.
+- [x] Backlog sweep — worked the remaining frontend-lane todo items. **Built:** session export/import as versioned JSON + large-session nudge (#18); "Read" focused reading-view of the selected path (#19); mobile sidebar drawer + Toolbar search RTL test (#20). **Already done / N-A (checked off above with notes):** minimap (already in Canvas), quota-copy-verbatim, "imported JSON normalizes size/position" (folded into #18's import), collapsed-node verification (collapse isn't in the rebuild). **Deferred with rationale:** server-side sync (backend/product decision), e2e smoke test (needs a committed Playwright runner — deliberate infra call). 54 tests total, all green; each feature live-verified in headless Chrome.
+- [x] Social-pipeline UI screenshots (Roshaan's P1 ask) — captured all 4 from the live app and pushed to `roshaan/social-pipeline` (`assets/ui/`, `[skip ci]`): `canvas-branching.png`, `full-tree.png`, `node-detail.png`, `branch-compare.png`. 2 of the 4 needed features that didn't exist, so I built them properly first: **node tags/comments** (store actions + `NodeAnnotations` inline footer on canvas nodes, demo enriched — merged #16) and the **branch-compare view** (`lib/compare.ts` pure helpers + full-screen `CompareView` overlay that dims shared context and marks where two paths diverge — merged #17). +7 tests across the two (44 total), live-verified each in headless Chrome. README table annotated per file.
+- [x] SEO P1 follow-ups (the two routing-layer items from Roshaan's 2026-06-10 homepage SEO pass): (1) per-route `<title>` + `<meta description>` via a new `usePageMeta` hook — captures the index.html defaults at module load and restores them on unmount, so it inherits whatever index.html ships (Roshaan's marketing copy on `roshaan/landing`) and never touches the verification/OG/JSON-LD tags; applied to `/privacy` + `/terms` (title + description), `/app` + the two auth pages (title only). (2) Code-split — lazy-loaded every route except `Landing`, so React Flow / the chat shell splits into its own ~250 kB chunk fetched only on `/app`; landing initial JS 281 kB → 193 kB gzip. +3 jsdom tests (37 total), build green, lint clean, live-verified all route titles + restore-on-nav in headless Chrome. Merged (#15). _The `index` chunk is still >500 kB (React + router + Landing's motion/PostHog, needed on first paint) — splitting motion / deferring PostHog is a separate optional pass._
+- [x] Coding-mode usage meter: wired the additive `coding` bucket from `/api/auth/usage` (Roshaan's backend `0a19026`) into `UsageMeter` — extracted a reusable `QuotaBar` (each bar now aria-labelled for AT) and render the coding allowance as a second `Code2`-iconed bar, only when the backend exposes it (`coding` typed optional in `api.ts` so it degrades against an older backend). +2 RTL tests (34 total). Merged (#14). _Closes the 2nd of Roshaan's two open quota questions; the 1st (charge-before-provider) his backend already fixed via refund-on-5xx._
+- [x] Merged Roshaan's `roshaan/model-branches` → `jayden/frontend`: the "Branch with model" feature (branch from any message picking OpenAI/Anthropic/Gemini/local; nearest-ancestor override inheritance via `resolveModelForNode`; `ModelPicker` with backend-ranked recommendations; model badges on AI replies). Reviewed the high-risk-file diffs line-by-line (`chatStore.ts`/`api.ts`/`types/chat.ts`/`InputBar.tsx`/`ChatNode.tsx` — `requestChatReply` now returns `{reply, provider, model}`, everything else additive, v1 persist unchanged) and re-verified in a worktree (32/32 tests, build green, lint = only the 3 pre-existing errors). Merged (#13). _Pre-existing CookieConsent-overlaps-composer bug Roshaan flagged is tracked separately; not from this branch._
 - [x] **Production chat outage fixed (2026-06-09, backend).** Root cause: `DB_USE_PGBOUNCER` was unset behind Supabase's transaction pooler, so asyncpg's prepared-statement cache collided across pooled backends and every DB-backed endpoint (`/api/chat/*`, `/api/auth/usage`) flapped 500s. Fix: set `DB_USE_PGBOUNCER=true` on Railway and redeployed (`backend` commit `c7c8d89`; the disable logic was already present in `app/db/session.py`, just gated on the flag). Verified: `/api/auth/usage` 12/12 = 200; chat returns real Gemini replies; refund-on-5xx and the coding-mode usage bucket confirmed live. Remaining intermittent 502s are Gemini free-tier 503/429 (overloaded/rate-limited), handled gracefully (clean `detail` + quota refund), not a backend bug. Added `DB_USE_PGBOUNCER=true` to the P0 deploy-env checklist and an incident note in `docs/backend-security.md`.
 - [x] Auth token routes: `/reset-password` + `/verify-email` pages (read `?token=`, POST it), forgot-password mode in `AuthDialog`, `VerifyEmailBanner` resend for unverified users, 4 `api.ts` helpers. Live-verified end-to-end with real tokens from the dev email log. Merged (#12).
 - [x] Merged `roshaan/landing` → `jayden/frontend`: marketing landing page, waitlist, **react-router**, PostHog (consent-gated) analytics, cookie consent, privacy/terms pages. The full chat shell now lives in `AppChat.tsx` under the gated `/app` route; resolved the entry-file restructure against 10 PRs of divergence. Merged (#11). _Deploy follow-ups (Pages production-branch repoint, Supabase `waitlist` table, PostHog key) tracked above — still a human/deploy decision._

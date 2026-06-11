@@ -7,19 +7,25 @@
 // landing page sits outside this subtree and stays visible.
 
 import { useState } from "react"
-import { PanelLeft } from "lucide-react"
+import { BookOpen, GitCompare, PanelLeft } from "lucide-react"
 import { Link } from "react-router-dom"
 
 import { AuthControls } from "@/components/AuthControls"
 import { Canvas } from "@/components/Canvas"
+import { CompareView } from "@/components/CompareView"
+import { FeedbackButton } from "@/components/FeedbackButton"
+import { FocusView } from "@/components/FocusView"
 import { InputBar } from "@/components/InputBar"
 import { Toolbar } from "@/components/Toolbar"
 import { UsageMeter } from "@/components/UsageMeter"
 import { VerifyEmailBanner } from "@/components/VerifyEmailBanner"
 import { Button } from "@/components/ui/button"
+import { useChatStore } from "@/store/chatStore"
 
 export function AppChat() {
   const [sidebarOpen, setSidebarOpen] = useState(true)
+  const openCompare = useChatStore((s) => s.openCompare)
+  const openFocusView = useChatStore((s) => s.openFocusView)
 
   return (
     <div className="ph-mask flex h-svh flex-col">
@@ -37,6 +43,25 @@ export function AppChat() {
           <h1 className="text-sm font-semibold tracking-tight">BranchChat</h1>
         </div>
         <div className="flex items-center gap-3">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="gap-1.5"
+            onClick={openFocusView}
+          >
+            <BookOpen className="size-4" />
+            Read
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="gap-1.5"
+            onClick={openCompare}
+          >
+            <GitCompare className="size-4" />
+            Compare
+          </Button>
+          <FeedbackButton />
           <UsageMeter />
           <AuthControls />
           <Link
@@ -48,8 +73,28 @@ export function AppChat() {
         </div>
       </header>
       <VerifyEmailBanner />
-      <div className="flex min-h-0 flex-1">
-        {sidebarOpen && <Toolbar />}
+      <div className="relative flex min-h-0 flex-1">
+        {sidebarOpen && (
+          <>
+            {/* Mobile-only backdrop: tap to dismiss the drawer (it overlays the
+                canvas on small screens; on sm+ the sidebar is an inline column
+                and this is hidden). */}
+            <div
+              className="absolute inset-0 z-20 bg-black/20 sm:hidden"
+              aria-hidden
+              onClick={() => setSidebarOpen(false)}
+            />
+            <Toolbar
+              onNavigate={() => {
+                // On mobile the drawer covers the canvas, so close it after the
+                // user picks a chat / search result.
+                if (window.matchMedia("(max-width: 639px)").matches) {
+                  setSidebarOpen(false)
+                }
+              }}
+            />
+          </>
+        )}
         <div className="flex min-w-0 flex-1 flex-col">
           <main className="min-h-0 flex-1">
             <Canvas />
@@ -59,6 +104,8 @@ export function AppChat() {
           </footer>
         </div>
       </div>
+      <CompareView />
+      <FocusView />
     </div>
   )
 }

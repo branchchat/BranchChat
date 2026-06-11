@@ -5,8 +5,17 @@
 // delete. Search lands in a follow-up. Toggled from the header (see App.tsx);
 // when hidden it renders nothing so the canvas gets the full width.
 
-import { useState } from "react";
-import { Pencil, Plus, Search, Sparkles, Trash2, X } from "lucide-react";
+import { useRef, useState } from "react";
+import {
+  Download,
+  Pencil,
+  Plus,
+  Search,
+  Sparkles,
+  Trash2,
+  Upload,
+  X,
+} from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -18,8 +27,18 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { cn, formatRelativeTime } from "@/lib/utils";
+import {
+  cn,
+  downloadTextFile,
+  formatRelativeTime,
+  slugifyFilename,
+} from "@/lib/utils";
 import { searchChats, type SearchResult } from "@/lib/search";
+import {
+  serializeChat,
+  storageUsageChars,
+  STORAGE_WARN_CHARS,
+} from "@/lib/sessionTransfer";
 import { useChatStore } from "@/store/chatStore";
 import type { ChatSessionState, Workspace } from "@/types/chat";
 
@@ -73,7 +92,7 @@ function groupByWorkspace(
   );
 }
 
-export function Toolbar() {
+export function Toolbar({ onNavigate }: { onNavigate?: () => void } = {}) {
   const chats = useChatStore((s) => s.chats);
   const activeChatId = useChatStore((s) => s.activeChatId);
   const createChat = useChatStore((s) => s.createChat);
@@ -82,6 +101,7 @@ export function Toolbar() {
   const renameChat = useChatStore((s) => s.renameChat);
   const deleteChat = useChatStore((s) => s.deleteChat);
   const openNode = useChatStore((s) => s.openNode);
+  const importChat = useChatStore((s) => s.importChat);
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draftTitle, setDraftTitle] = useState("");
@@ -89,6 +109,34 @@ export function Toolbar() {
     null,
   );
   const [query, setQuery] = useState("");
+  const [importError, setImportError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Export the active chat to a JSON file the user can back up or re-import.
+  const exportActive = () => {
+    const active = chats[activeChatId];
+    if (!active) return;
+    downloadTextFile(
+      `branchchat-${slugifyFilename(active.title)}.json`,
+      serializeChat(active),
+    );
+  };
+
+  // Read a chosen file and import it as a new chat (store validates/normalizes).
+  const onImportFile = async (file: File | undefined) => {
+    if (!file) return;
+    setImportError(null);
+    try {
+      importChat(await file.text());
+    } catch (err) {
+      setImportError(
+        err instanceof Error ? err.message : "Couldn't import that file.",
+      );
+    }
+  };
+
+  // Nudge to back up once the persisted store gets large (localStorage ~5 MB).
+  const storageLarge = storageUsageChars() > STORAGE_WARN_CHARS;
 
   const grouped = groupByWorkspace(Object.values(chats));
   const searching = query.trim().length > 0;
@@ -104,7 +152,15 @@ export function Toolbar() {
   };
 
   return (
-    <aside className="flex h-full w-60 shrink-0 flex-col border-r bg-card/40">
+    <aside
+      className={cn(
+        "flex h-full flex-col border-r",
+        // Mobile: float over the canvas as a solid drawer so it never squeezes
+        // the graph. Desktop (sm+): a fixed inline column, translucent as before.
+        "absolute inset-y-0 left-0 z-30 w-[min(85vw,15rem)] bg-card shadow-xl",
+        "sm:relative sm:inset-auto sm:z-auto sm:w-60 sm:shrink-0 sm:bg-card/40 sm:shadow-none",
+      )}
+    >
       <div className="flex items-center justify-between px-3 py-2.5">
         <span className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
           Chats
@@ -153,7 +209,10 @@ export function Toolbar() {
                   <button
                     type="button"
                     className="flex w-full flex-col gap-0.5 rounded-md px-2 py-1.5 text-left hover:bg-muted/60"
-                    onClick={() => openNode(r.chatId, r.nodeId)}
+                    onClick={() => {
+                      openNode(r.chatId, r.nodeId);
+                      onNavigate?.();
+                    }}
                   >
                     <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
                       <span className="truncate">{r.chatTitle}</span>
@@ -206,7 +265,10 @@ export function Toolbar() {
                         <button
                           type="button"
                           className="min-w-0 flex-1 truncate text-left"
-                          onClick={() => switchChat(chat.id)}
+                          onClick={() => {
+                            switchChat(chat.id);
+                            onNavigate?.();
+                          }}
                           title={chat.title}
                         >
                           {chat.title}
@@ -243,7 +305,7 @@ export function Toolbar() {
         )}
       </nav>
 
-      <div className="border-t p-2">
+      <div className="space-y-1 border-t p-2">
         <Button
           variant="ghost"
           size="sm"
@@ -253,6 +315,50 @@ export function Toolbar() {
           <Sparkles className="size-3.5" />
           Load demo conversation
         </Button>
+
+        <div className="flex gap-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="flex-1 justify-start gap-2 text-xs text-muted-foreground"
+            onClick={exportActive}
+            title="Download this chat as a JSON file"
+          >
+            <Download className="size-3.5" />
+            Export chat
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="flex-1 justify-start gap-2 text-xs text-muted-foreground"
+            onClick={() => fileInputRef.current?.click()}
+            title="Import a chat from a JSON file"
+          >
+            <Upload className="size-3.5" />
+            Import
+          </Button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="application/json,.json"
+            className="hidden"
+            onChange={(e) => {
+              void onImportFile(e.target.files?.[0]);
+              e.target.value = ""; // allow re-importing the same file
+            }}
+          />
+        </div>
+
+        {importError && (
+          <p role="alert" className="px-2 text-xs text-destructive">
+            {importError}
+          </p>
+        )}
+        {storageLarge && (
+          <p className="px-2 text-[11px] text-muted-foreground">
+            Local storage is getting large — export chats you want to keep.
+          </p>
+        )}
       </div>
 
       <Dialog

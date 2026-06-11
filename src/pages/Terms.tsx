@@ -2,8 +2,13 @@ import { Link } from "react-router-dom";
 
 import { LegalLayout, LegalSection } from "@/components/legal/LegalLayout";
 import { LEGAL } from "@/lib/legal";
+import { usePageMeta } from "@/lib/usePageMeta";
 
 export function Terms() {
+  usePageMeta(
+    "Terms of Service · BranchChat",
+    "The terms governing your access to and use of BranchChat.",
+  );
   return (
     <LegalLayout title="Terms of Service" updated={LEGAL.effectiveDate}>
       <p className="text-sm leading-relaxed text-muted-foreground">

@@ -12,8 +12,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ChatApiError, resetPassword } from "@/lib/api";
 import { readAuthTokenFromUrl } from "@/lib/authToken";
+import { usePageMeta } from "@/lib/usePageMeta";
 
 export function ResetPassword() {
+  usePageMeta("Reset password · BranchChat");
   // Reads the token AND strips it from the address bar — a live reset token
   // must not sit in history/analytics while the user types a new password.
   const token = readAuthTokenFromUrl();

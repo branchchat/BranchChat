@@ -1,7 +1,12 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { migratePersistedState, useChatStore } from "@/store/chatStore";
+import {
+  migratePersistedState,
+  resolveModelForNode,
+  useChatStore,
+} from "@/store/chatStore";
+import { serializeChat } from "@/lib/sessionTransfer";
 
 const store = () => useChatStore.getState();
 
@@ -77,5 +82,176 @@ describe("chat management actions", () => {
       chatId: id,
       nodeId: someNode.id,
     });
+  });
+});
+
+describe("model-specific branches", () => {
+  const GEMINI = {
+    provider: "gemini",
+    model: "gemini-2.5-pro",
+    label: "Gemini 2.5 Pro",
+  };
+  const CLAUDE = {
+    provider: "anthropic",
+    model: "claude-fable-5",
+    label: "Claude Fable 5",
+  };
+
+  beforeEach(() => {
+    localStorage.clear();
+    store().createChat({ title: "model branches" });
+  });
+
+  const activeChat = () => store().chats[store().activeChatId];
+
+  it("branchFromNode stamps the override on the branch's first user node and journals it", () => {
+    const root = activeChat().rootId;
+    const result = store().branchFromNode(root, "try this with gemini", {
+      model: GEMINI,
+    })!;
+
+    const userNode = activeChat().nodes[result.userId];
+    expect(userNode.modelOverride).toEqual(GEMINI);
+    // The loading assistant node carries no override of its own; it INHERITS.
+    expect(activeChat().nodes[result.assistantId].modelOverride).toBeUndefined();
+
+    const lastJournal = activeChat().journalEntries.at(-1)!;
+    expect(lastJournal.type).toBe("branch");
+    expect(lastJournal.message).toContain("Gemini 2.5 Pro");
+  });
+
+  it("resolveModelForNode walks up to the nearest ancestor override", () => {
+    const root = activeChat().rootId;
+    const branch = store().branchFromNode(root, "gemini branch", {
+      model: GEMINI,
+    })!;
+
+    // The assistant node and any continuation under it inherit the branch model.
+    expect(resolveModelForNode(activeChat().nodes, branch.assistantId)).toEqual(
+      GEMINI,
+    );
+    const continuation = store().addUserMessage(
+      "continue here",
+      branch.assistantId,
+    )!;
+    expect(
+      resolveModelForNode(activeChat().nodes, continuation.assistantId),
+    ).toEqual(GEMINI);
+
+    // Nodes outside the branch (the root path) resolve to the app default.
+    expect(resolveModelForNode(activeChat().nodes, root)).toBeNull();
+  });
+
+  it("nested branches override the outer branch's model", () => {
+    const root = activeChat().rootId;
+    const gemini = store().branchFromNode(root, "gemini branch", {
+      model: GEMINI,
+    })!;
+    const claude = store().branchFromNode(
+      gemini.assistantId,
+      "now ask claude",
+      { model: CLAUDE },
+    )!;
+
+    // Deeper override wins on the nested path…
+    expect(resolveModelForNode(activeChat().nodes, claude.assistantId)).toEqual(
+      CLAUDE,
+    );
+    // …while the outer branch keeps its own model.
+    expect(resolveModelForNode(activeChat().nodes, gemini.userId)).toEqual(
+      GEMINI,
+    );
+  });
+
+  it("sibling branches do not affect each other's model", () => {
+    const root = activeChat().rootId;
+    const withModel = store().branchFromNode(root, "model branch", {
+      model: CLAUDE,
+    })!;
+    const plain = store().branchFromNode(root, "plain branch")!;
+
+    expect(
+      resolveModelForNode(activeChat().nodes, withModel.assistantId),
+    ).toEqual(CLAUDE);
+    expect(
+      resolveModelForNode(activeChat().nodes, plain.assistantId),
+    ).toBeNull();
+  });
+});
+
+describe("node annotations (tags + comments)", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    store().createChat({ title: "annotations" });
+  });
+
+  const activeChat = () => store().chats[store().activeChatId];
+  const rootNode = () => activeChat().nodes[activeChat().rootId];
+
+  it("addTag appends, trims, dedupes, and journals", () => {
+    const id = rootNode().id;
+    store().addTag(id, "  research  ");
+    store().addTag(id, "research"); // duplicate — ignored
+    store().addTag(id, "   "); // empty — ignored
+
+    expect(activeChat().nodes[id].tags).toEqual(["research"]);
+    const j = activeChat().journalEntries.at(-1)!;
+    expect(j.type).toBe("tag");
+    expect(j.message).toContain("research");
+  });
+
+  it("removeTag drops the tag and clears the array when empty", () => {
+    const id = rootNode().id;
+    store().addTag(id, "a");
+    store().addTag(id, "b");
+    store().removeTag(id, "a");
+    expect(activeChat().nodes[id].tags).toEqual(["b"]);
+
+    store().removeTag(id, "b");
+    // Last tag removed → field cleared rather than left as an empty array.
+    expect(activeChat().nodes[id].tags).toBeUndefined();
+  });
+
+  it("addComment appends a comment with an id; removeComment deletes it", () => {
+    const id = rootNode().id;
+    store().addComment(id, "  first note  ");
+    store().addComment(id, ""); // empty — ignored
+
+    const comments = activeChat().nodes[id].comments!;
+    expect(comments).toHaveLength(1);
+    expect(comments[0].content).toBe("first note");
+    expect(comments[0].id).toBeTruthy();
+
+    store().removeComment(id, comments[0].id);
+    expect(activeChat().nodes[id].comments).toBeUndefined();
+  });
+});
+
+describe("importChat", () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  it("imports a serialized chat as a new active chat with a fresh id", () => {
+    // Build a real chat to export by loading the demo.
+    const demoId = store().loadDemoChat();
+    const exported = serializeChat(store().chats[demoId]);
+
+    const before = Object.keys(store().chats).length;
+    const newId = store().importChat(exported);
+
+    expect(Object.keys(store().chats).length).toBe(before + 1);
+    expect(newId).not.toBe(demoId); // fresh chat id, not an overwrite
+    expect(store().activeChatId).toBe(newId);
+
+    const imported = store().chats[newId];
+    expect(imported.title).toBe("Demo: Kyoto trip");
+    // activePath is recomputed from the selected node down to the root.
+    expect(imported.activePath[0]).toBe(imported.rootId);
+    expect(imported.activePath.at(-1)).toBe(imported.selectedNodeId);
+  });
+
+  it("throws a user-facing error on a malformed file", () => {
+    expect(() => store().importChat("{ broken")).toThrow(/valid JSON/);
   });
 });
