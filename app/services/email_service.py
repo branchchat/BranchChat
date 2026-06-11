@@ -188,7 +188,7 @@ async def send_account_exists_email(to: str) -> None:
                 "password” on the sign-in screen."
             ),
             button_label="Sign in",
-            button_url=f"{settings.APP_BASE_URL}/app",
+            button_url=f"{settings.APP_BASE_URL}/app?auth=signin",
             footnote=(
                 "If this wasn't you, no action is needed — your account is "
                 "unchanged."
@@ -272,7 +272,7 @@ async def send_beta_approved_email(to: str) -> None:
                 "straight to us."
             ),
             button_label="Open BranchChat",
-            button_url=f"{settings.APP_BASE_URL}/app",
+            button_url=f"{settings.APP_BASE_URL}/app?auth=signin",
             footnote="You're receiving this because you requested beta access.",
         ),
     )
