@@ -9,9 +9,15 @@ type State = "idle" | "loading" | "done";
 export function WaitlistForm({
   source = "landing",
   className,
+  cta = "Join waitlist",
+  note = "Invite-only early access. No spam, unsubscribe anytime.",
 }: {
   source?: string;
   className?: string;
+  // Submit-button label + the reassurance line under the form. Defaults suit
+  // the landing waitlist; the /beta page overrides them for beta copy.
+  cta?: string;
+  note?: string;
 }) {
   const [email, setEmail] = useState("");
   const [state, setState] = useState<State>("idle");
@@ -79,7 +85,7 @@ export function WaitlistForm({
             </>
           ) : (
             <>
-              Join waitlist
+              {cta}
               <ArrowRight className="size-4" />
             </>
           )}
@@ -88,9 +94,7 @@ export function WaitlistForm({
       {error ? (
         <p className="mt-2 text-xs text-destructive">{error}</p>
       ) : (
-        <p className="mt-2 text-xs text-muted-foreground">
-          Invite-only early access. No spam, unsubscribe anytime.
-        </p>
+        <p className="mt-2 text-xs text-muted-foreground">{note}</p>
       )}
     </form>
   );
