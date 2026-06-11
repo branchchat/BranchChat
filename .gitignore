@@ -28,6 +28,10 @@ dist-ssr
 *.sln
 *.sw?
 
+# Playwright artifacts
+test-results/
+playwright-report/
+
 # Installed design skills (not app code)
 .agents/
 skills-lock.json

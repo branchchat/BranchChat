@@ -294,7 +294,7 @@ capturing these trivial.
 ### P2 - Testing
 
 - [x] Add React Testing Library coverage for `Toolbar` search result rendering — `Toolbar.test.tsx` covers matching result cards + `<mark>` highlight and the empty state. Merged (#20).
-- [ ] Add browser/e2e smoke test: load demo, search phrase, click result, assert node is selected/centered. _(Deferred — needs a committed browser-test runner (Playwright): a real infra add (heavy dep + CI download) for a beta, and `npm audit` = 0 is a project invariant. The same flows are currently smoke-checked per-PR via headless Chrome (puppeteer-core, not committed). Worth a deliberate yes before adding the runner.)_
+- [x] Add browser/e2e smoke test — Roshaan (human) made the deliberate call to accept the infra weight (2026-06-10): `@playwright/test` is now a committed devDependency (`npm audit` still 0). `playwright.config.ts` boots the Vite dev server itself; `e2e/smoke.spec.ts` covers load demo → search "sake breweries" → click result → asserts the node on the non-active branch is selected (React Flow `selected` class) and centered in the viewport. Run with `npm run e2e` (Chromium only, `npx playwright install chromium` once per machine).
 - [ ] Add backend contract tests for `/api/chat/gemini`, `/api/chat/summarize`, and `/api/share`.
 
 ## Recently Completed
