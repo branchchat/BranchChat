@@ -1,15 +1,14 @@
 // /beta — beta-tester recruitment page.
 //
-// A focused signup surface (separate from the marketing landing) you can link
-// from outreach / social. Reuses the existing waitlist pipe with source="beta"
-// (the backend already stores `source`), so there's no new backend: signups
-// land in the same Supabase table, tagged beta, and you draw invites from it.
+// A focused surface (separate from the marketing landing) you can link from
+// outreach / social. One CTA: create an account at /app, which lands in the
+// pending-approval state until a founder approves it via /api/admin/beta.
+// (The general waitlist still lives on the landing page.)
 
 import { Link } from "react-router-dom";
 import { Check, GitBranch, MessageSquarePlus, Sparkles } from "lucide-react";
 
 import { Brand } from "@/components/landing/Brand";
-import { WaitlistForm } from "@/components/landing/WaitlistForm";
 import { usePageMeta } from "@/lib/usePageMeta";
 
 const EXPECTATIONS = [
@@ -90,16 +89,6 @@ export function Beta() {
             >
               Create your account
             </Link>
-            <p className="mt-3 text-xs text-muted-foreground">
-              Prefer email updates instead? Join the list below.
-            </p>
-            <div className="mt-3">
-              <WaitlistForm
-                source="beta"
-                cta="Keep me posted"
-                note="No spam — just beta updates. Unsubscribe anytime."
-              />
-            </div>
           </div>
         </div>
 

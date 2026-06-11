@@ -17,15 +17,12 @@ describe("Beta page", () => {
     expect(
       screen.getByRole("heading", { name: /help shape branchchat/i }),
     ).toBeInTheDocument();
-    // Primary CTA: create an account (the account-gated beta flow)…
+    // Single CTA: create an account (the account-gated beta flow); the
+    // waitlist form deliberately does NOT render here.
     expect(
       screen.getByRole("link", { name: /create your account/i }),
     ).toHaveAttribute("href", "/app");
-    // …with the waitlist kept as a secondary email-updates path.
-    expect(
-      screen.getByRole("button", { name: /keep me posted/i }),
-    ).toBeInTheDocument();
-    expect(screen.getByLabelText(/email address/i)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/email address/i)).not.toBeInTheDocument();
     // "What to expect" list is present.
     expect(screen.getByText("Early access")).toBeInTheDocument();
     expect(screen.getByText("Shape the product")).toBeInTheDocument();
