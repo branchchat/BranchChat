@@ -107,7 +107,11 @@ class Settings(BaseSettings):
     # -- Auth / cookies -----------------------------------------------------
     JWT_SECRET_KEY: str = _DEV_JWT_SECRET
     JWT_ALGORITHM: str = "HS256"
-    JWT_EXPIRE_MINUTES: int = 60
+    # 7 days. The old 60 minutes signed testers out mid-session constantly
+    # (an open tab past the hour hit "session expired" on the next message).
+    # The cookie is HttpOnly + Secure and a password change still invalidates
+    # earlier tokens immediately (password_changed_at check in deps).
+    JWT_EXPIRE_MINUTES: int = 60 * 24 * 7
     AUTH_COOKIE_NAME: str = "branchchat_token"
     ANON_COOKIE_NAME: str = "branchchat_anon_id"
     COOKIE_SECURE: bool = False

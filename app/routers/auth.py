@@ -55,10 +55,15 @@ _INVALID_TOKEN = "Invalid or expired token."
 
 
 def _set_auth_cookie(response: Response, user_id: str) -> None:
+    # The cookie deliberately OUTLIVES the token. An expired JWT is useless
+    # for auth (exp is checked), but its presence is how the backend tells
+    # "session ran out" apart from "never signed in" — if the browser evicted
+    # the cookie at exp, an expired session would look anonymous and get the
+    # wrong error (create-an-account instead of sign-in-again).
     response.set_cookie(
         key=settings.AUTH_COOKIE_NAME,
         value=create_access_token(user_id),
-        max_age=settings.JWT_EXPIRE_MINUTES * 60,
+        max_age=settings.JWT_EXPIRE_MINUTES * 60 + 60 * 60 * 24 * 30,
         httponly=True,
         secure=settings.COOKIE_SECURE,
         samesite=settings.COOKIE_SAMESITE,

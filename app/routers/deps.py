@@ -27,6 +27,11 @@ class IdentityContext:
     user_id: str | None
     anon_id: str
     client_ip: str
+    # True when an auth cookie WAS presented but didn't decode (expired or
+    # invalid token). Lets endpoints tell "signed-in session ran out" apart
+    # from "never signed in" — the former should hear "sign in again", not
+    # the anonymous-caller copy.
+    stale_session: bool = False
 
     @property
     def distinct_id(self) -> str:
@@ -51,6 +56,9 @@ def _decode_user_id(request: Request) -> str | None:
 
 async def request_identity(request: Request, response: Response) -> IdentityContext:
     user_id = _decode_user_id(request)
+    stale_session = user_id is None and bool(
+        request.cookies.get(settings.AUTH_COOKIE_NAME)
+    )
 
     anon_id = request.cookies.get(settings.ANON_COOKIE_NAME)
     if not anon_id:
@@ -67,7 +75,10 @@ async def request_identity(request: Request, response: Response) -> IdentityCont
         )
 
     return IdentityContext(
-        user_id=user_id, anon_id=anon_id, client_ip=identity.client_ip(request)
+        user_id=user_id,
+        anon_id=anon_id,
+        client_ip=identity.client_ip(request),
+        stale_session=stale_session,
     )
 
 

@@ -50,6 +50,14 @@ async def _require_beta_access(
     unapproved accounts a pending notice; neither costs anything.
     """
     if ctx.user_id is None:
+        if ctx.stale_session:
+            # They WERE signed in — the cookie just expired. Telling them to
+            # "create an account" is wrong and alarming; a 401 also lets the
+            # frontend pop the sign-in dialog instead of an error node.
+            raise HTTPException(
+                status.HTTP_401_UNAUTHORIZED,
+                detail="Your session has expired. Sign in again to continue.",
+            )
         raise HTTPException(
             status.HTTP_403_FORBIDDEN,
             detail=(

@@ -105,6 +105,17 @@ def test_anonymous_chat_is_blocked(client):
     assert "private beta" in r.json()["detail"].lower()
 
 
+def test_expired_session_gets_401_sign_in_again_not_the_anon_copy(client):
+    # An auth cookie that no longer decodes (expired/garbage token) means the
+    # caller WAS signed in — they must hear "sign in again" (401, so the
+    # frontend pops the auth dialog), never "create an account".
+    client.cookies.set(settings.AUTH_COOKIE_NAME, "expired-or-garbage")
+    r = client.post("/api/chat/gemini", json=_chat_payload())
+    assert r.status_code == 401
+    assert "session has expired" in r.json()["detail"].lower()
+    assert "create an account" not in r.json()["detail"].lower()
+
+
 def test_unapproved_account_is_blocked_then_approved_can_chat(
     admin_token, monkeypatch
 ):
