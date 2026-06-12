@@ -169,6 +169,12 @@ export async function syncNow(): Promise<void> {
 
     setStatus({ state: "synced", lastSyncedAt: Date.now() });
   } catch (err) {
+    // A 401 here usually means the session cookie expired while the tab sat
+    // open — surface the sign-in prompt, not just a status-line error.
+    // (Structural check: the api module is mocked in tests.)
+    if ((err as { status?: number } | null)?.status === 401) {
+      void useAuthStore.getState().checkSessionExpiry();
+    }
     setStatus({
       state: "error",
       message: err instanceof Error ? err.message : "Sync failed.",

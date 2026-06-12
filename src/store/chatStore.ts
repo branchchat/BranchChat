@@ -615,6 +615,16 @@ export const useChatStore = create<ChatStoreState>()(
             err instanceof ChatApiError
               ? err.message
               : "Something went wrong requesting the reply.";
+          // An auth-shaped failure may mean the session cookie expired while
+          // the tab sat open: re-verify, and AppChat pops the sign-in dialog
+          // instead of leaving the user with just an error node. (403 covers
+          // the legacy already-evicted-cookie case, which reads as anonymous.)
+          if (
+            err instanceof ChatApiError &&
+            (err.status === 401 || err.status === 403)
+          ) {
+            void useAuthStore.getState().checkSessionExpiry();
+          }
           fillAssistant(chatId, assistantId, `⚠️ ${detail}`, true);
         } finally {
           // A reply consumed quota (and a 429 means the meter was stale) —

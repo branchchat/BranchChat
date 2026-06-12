@@ -11,6 +11,7 @@ import { BookOpen, GitCompare, PanelLeft } from "lucide-react"
 import { Link } from "react-router-dom"
 
 import { AuthControls } from "@/components/AuthControls"
+import { AuthDialog } from "@/components/AuthDialog"
 import { Canvas } from "@/components/Canvas"
 import { CompareView } from "@/components/CompareView"
 import { FeedbackButton } from "@/components/FeedbackButton"
@@ -21,12 +22,15 @@ import { UsageMeter } from "@/components/UsageMeter"
 import { VerifyEmailBanner } from "@/components/VerifyEmailBanner"
 import { Button } from "@/components/ui/button"
 import { startSyncLoop } from "@/lib/sync"
+import { useAuthStore } from "@/store/authStore"
 import { useChatStore } from "@/store/chatStore"
 
 export function AppChat() {
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const openCompare = useChatStore((s) => s.openCompare)
   const openFocusView = useChatStore((s) => s.openFocusView)
+  const sessionExpired = useAuthStore((s) => s.sessionExpired)
+  const clearSessionExpired = useAuthStore((s) => s.clearSessionExpired)
 
   // Background server-side sync for signed-in users (no-op unless enabled
   // via the Toolbar toggle; idempotent across remounts).
@@ -111,6 +115,19 @@ export function AppChat() {
       </div>
       <CompareView />
       <FocusView />
+      {/* Session-expiry re-auth: when the cookie runs out mid-session
+          (authStore.checkSessionExpiry, fed by chat/sync 401s), prompt a
+          sign-in OVER the canvas instead of unmounting to the gate — nothing
+          local is lost, and a successful login clears the flag. Dismissible:
+          local chats stay browsable; the next failed send re-prompts. */}
+      <AuthDialog
+        open={sessionExpired}
+        onOpenChange={(open) => {
+          if (!open) clearSessionExpired()
+        }}
+        initialMode="signin"
+        banner="Your session expired — sign in to pick up where you left off."
+      />
     </div>
   )
 }

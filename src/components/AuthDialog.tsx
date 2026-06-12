@@ -52,6 +52,7 @@ export function AuthDialog({
   open,
   onOpenChange,
   initialMode = "signin",
+  banner,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -59,6 +60,8 @@ export function AuthDialog({
   // account" opens straight to signup). The in-dialog switch links still
   // work; this only picks the starting mode.
   initialMode?: "signin" | "signup";
+  // Contextual heads-up shown above the form (e.g. "your session expired").
+  banner?: string;
 }) {
   const login = useAuthStore((s) => s.login);
   const signup = useAuthStore((s) => s.signup);
@@ -118,6 +121,15 @@ export function AuthDialog({
           <DialogTitle>{copy.title}</DialogTitle>
           <DialogDescription>{copy.description}</DialogDescription>
         </DialogHeader>
+
+        {banner && (
+          <p
+            role="status"
+            className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400"
+          >
+            {banner}
+          </p>
+        )}
 
         {notice ? (
           <p className="text-sm text-muted-foreground">{notice}</p>

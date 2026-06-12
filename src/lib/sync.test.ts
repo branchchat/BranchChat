@@ -19,6 +19,8 @@ vi.mock("@/lib/api", () => ({
   fetchSyncedChat: vi.fn(),
   pushSyncedChat: vi.fn(),
   deleteSyncedChat: vi.fn(),
+  // authStore's session re-check (sync 401s feed checkSessionExpiry).
+  fetchCurrentUser: vi.fn(async () => null),
 }));
 
 const api = vi.mocked(await import("@/lib/api"));
@@ -59,6 +61,7 @@ beforeEach(() => {
   useAuthStore.setState({
     user: { email: "t@example.com", email_verified: true },
     hydrated: true,
+    sessionExpired: false,
   } as never);
   api.fetchSyncManifest.mockResolvedValue([]);
   api.pushSyncedChat.mockResolvedValue({ status: "stored", updated_at: 0 });
@@ -228,6 +231,16 @@ describe("syncNow", () => {
     useAuthStore.setState({ user: null } as never);
     await syncNow();
     expect(api.fetchSyncManifest).not.toHaveBeenCalled();
+  });
+
+  it("flags session expiry when sync hits a 401", async () => {
+    api.fetchSyncManifest.mockRejectedValue(
+      Object.assign(new Error("Not authenticated."), { status: 401 }),
+    );
+    await syncNow();
+    await vi.waitFor(() =>
+      expect(useAuthStore.getState().sessionExpired).toBe(true),
+    );
   });
 });
 

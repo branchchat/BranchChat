@@ -28,9 +28,17 @@ export interface AuthStoreState {
   usage: UsageStatus | null;
   // True once hydrate() has settled (used to tell "anonymous" from "unknown").
   hydrated: boolean;
+  // True when the signed-in session stopped authenticating (cookie expired)
+  // — AppChat pops the sign-in dialog over the canvas. The stale `user` is
+  // kept so the gate doesn't unmount the app mid-work.
+  sessionExpired: boolean;
 
   hydrate: () => Promise<void>;
   refreshUsage: () => Promise<void>;
+  // Called after an auth-shaped failure (401/403) anywhere: re-verifies the
+  // session against /me and raises sessionExpired if it's gone.
+  checkSessionExpiry: () => Promise<void>;
+  clearSessionExpired: () => void;
 
   // The three actions below throw ChatApiError with the backend's user-facing
   // `detail` on failure — forms render err.message directly.
@@ -47,6 +55,7 @@ export const useAuthStore = create<AuthStoreState>()((set, get) => ({
   user: null,
   usage: null,
   hydrated: false,
+  sessionExpired: false,
 
   hydrate: async () => {
     if (!isBackendConfigured() || hydrating) return;
@@ -73,13 +82,30 @@ export const useAuthStore = create<AuthStoreState>()((set, get) => ({
     }
   },
 
+  checkSessionExpiry: async () => {
+    // Only meaningful when the UI believes someone is signed in.
+    if (!isBackendConfigured() || !get().user || get().sessionExpired) return;
+    const fresh = await fetchCurrentUser().catch(() => null);
+    if (!fresh) {
+      set({ sessionExpired: true });
+    }
+  },
+
+  clearSessionExpired: () => set({ sessionExpired: false }),
+
   login: async (email, password) => {
     const user = await loginRequest(email, password);
     // Fetch the new identity's quota BEFORE surfacing the user, then commit
     // both in one set() — otherwise the header would show the email next to
     // the stale anon limit for a frame until usage caught up.
     const usage = await fetchUsage().catch(() => null);
-    set((s) => ({ user, usage: usage ?? s.usage, hydrated: true }));
+    // A successful login also resolves any session-expired prompt.
+    set((s) => ({
+      user,
+      usage: usage ?? s.usage,
+      hydrated: true,
+      sessionExpired: false,
+    }));
   },
 
   signup: async (email, password) => {
@@ -90,7 +116,8 @@ export const useAuthStore = create<AuthStoreState>()((set, get) => ({
   logout: async () => {
     await logoutRequest();
     // Same single-commit pattern: drop the user and the anon quota together.
+    // A deliberate sign-out is not an expired session.
     const usage = await fetchUsage().catch(() => null);
-    set((s) => ({ user: null, usage: usage ?? s.usage }));
+    set((s) => ({ user: null, usage: usage ?? s.usage, sessionExpired: false }));
   },
 }));
