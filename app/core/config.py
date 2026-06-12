@@ -95,6 +95,14 @@ class Settings(BaseSettings):
     # -- Server-side guardrails (never trust the client) --------------------
     MAX_MESSAGE_CHARS: int = 5_000
     MAX_MESSAGE_CHARS_CODING: int = 10_000
+    # Reply length ceiling sent to the provider. A CEILING, not a target: a
+    # short answer still costs little, so this only needs to be high enough
+    # that long answers (detailed reviews, full code) aren't cut off
+    # mid-sentence. The old 2048 truncated resume-review-length replies. 8192
+    # is safe on every catalog model's output limit (Claude adds thinking
+    # headroom on top — see providers/anthropic.py).
+    MAX_OUTPUT_TOKENS: int = 8_192
+    MAX_OUTPUT_TOKENS_CODING: int = 8_192
     MAX_HISTORY_MESSAGES: int = 28
     MAX_HISTORY_CHARS: int = 48_000
     MAX_LINKED_CONTEXT_BLOCKS: int = 4

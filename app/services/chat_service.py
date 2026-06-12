@@ -118,7 +118,11 @@ async def generate_ai_response(
         system_instruction=system_instruction,
         history=history,
         message=message,
-        max_output_tokens=4096 if req.coding_mode else 2048,
+        max_output_tokens=(
+            settings.MAX_OUTPUT_TOKENS_CODING
+            if req.coding_mode
+            else settings.MAX_OUTPUT_TOKENS
+        ),
         attachments=req.attachments,
     )
 
