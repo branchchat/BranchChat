@@ -46,6 +46,22 @@ def test_chat_request_caps_attachment_count():
         )
 
 
+def test_attachment_only_message_is_allowed():
+    # "Here's my resume" with no typed text: the file IS the message.
+    req = ChatRequest(node_id="n", message="", attachments=[_att()])
+    assert req.message == ""
+    # Whitespace-only text counts as empty too.
+    req = ChatRequest(node_id="n", message="   ", attachments=[_att()])
+    assert req.message == ""
+
+
+def test_empty_message_without_attachments_is_rejected():
+    with pytest.raises(ValidationError):
+        ChatRequest(node_id="n", message="")
+    with pytest.raises(ValidationError):
+        ChatRequest(node_id="n", message="   ")
+
+
 # --- pre-quota gate ----------------------------------------------------------
 
 
@@ -91,6 +107,13 @@ def test_gemini_contents_put_inline_data_before_text():
         "inline_data": {"mime_type": "image/png", "data": PNG_B64}
     }
     assert parts[-1] == {"text": "what is this?"}
+
+
+def test_gemini_attachment_only_send_has_no_empty_text_part():
+    contents = _to_contents([], "", [_att()])
+    parts = contents[-1]["parts"]
+    assert len(parts) == 1
+    assert "inline_data" in parts[0]
 
 
 @pytest.mark.asyncio

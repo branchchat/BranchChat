@@ -67,7 +67,10 @@ class AnthropicProvider(AIProvider):
                 }
                 for a in req.attachments
             ]
-            blocks.append({"type": "text", "text": messages[-1]["content"]})
+            # Attachment-only send: this API hard-rejects EMPTY text blocks,
+            # so only append one when there's actual text.
+            if messages[-1]["content"]:
+                blocks.append({"type": "text", "text": messages[-1]["content"]})
             messages[-1] = {"role": "user", "content": blocks}
 
         body = {

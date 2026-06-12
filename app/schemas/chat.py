@@ -22,7 +22,7 @@ from __future__ import annotations
 import base64
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 Role = Literal["system", "user", "assistant"]
 
@@ -68,7 +68,9 @@ class LinkedContextBlock(BaseModel):
 
 class ChatRequest(BaseModel):
     node_id: Annotated[str, Field(max_length=200)]
-    message: Annotated[str, Field(min_length=1, max_length=20_000)]
+    # May be EMPTY only when attachments are present ("here's my resume" —
+    # the file is the message); enforced by the model validator below.
+    message: Annotated[str, Field(max_length=20_000)] = ""
     history: Annotated[list[ProviderMessage], Field(max_length=200)] = Field(
         default_factory=list
     )
@@ -90,10 +92,13 @@ class ChatRequest(BaseModel):
     @field_validator("message")
     @classmethod
     def _strip_message(cls, v: str) -> str:
-        v = v.strip()
-        if not v:
+        return v.strip()
+
+    @model_validator(mode="after")
+    def _need_message_or_attachments(self) -> "ChatRequest":
+        if not self.message and not self.attachments:
             raise ValueError("message must not be empty")
-        return v
+        return self
 
 
 class ChatResponse(BaseModel):

@@ -46,7 +46,10 @@ def _to_contents(history, message: str, attachments=()) -> list[dict]:
         {"inline_data": {"mime_type": a.media_type, "data": a.data}}
         for a in attachments
     ]
-    parts.append({"text": message})
+    # Attachment-only sends have no text (the schema guarantees at least one
+    # of the two); an empty text part would be noise at best.
+    if message:
+        parts.append({"text": message})
     contents.append({"role": "user", "parts": parts})
     return contents
 

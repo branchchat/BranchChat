@@ -54,7 +54,9 @@ class OpenAIProvider(AIProvider):
                 }
                 for a in req.attachments
             ]
-            content.append({"type": "text", "text": req.message})
+            # Attachment-only send: skip the empty text item.
+            if req.message:
+                content.append({"type": "text", "text": req.message})
             messages.append({"role": "user", "content": content})
         else:
             messages.append({"role": "user", "content": req.message})
