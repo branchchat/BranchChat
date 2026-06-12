@@ -74,7 +74,8 @@ export function InputBar() {
   const closeModelPicker = useChatStore((s) => s.closeModelPicker);
 
   const selected = chat ? chat.nodes[chat.selectedNodeId] : undefined;
-  const canSend = draft.trim().length > 0 && !!selected;
+  // An attachment with no typed text is a valid message ("here's my resume").
+  const canSend = (draft.trim().length > 0 || files.length > 0) && !!selected;
 
   // Warm the model-catalog cache so node badges and the inherited-model line
   // can resolve display labels synchronously. No-op in stub mode.
@@ -138,7 +139,7 @@ export function InputBar() {
 
   const submit = (mode: "continue" | "branch") => {
     const text = draft.trim();
-    if (!text || !selected) return;
+    if ((!text && files.length === 0) || !selected) return;
     const attachments = files.length ? files : undefined;
     // An armed model choice always wins: the chip told the user the next
     // message starts a model branch from the chosen node.
@@ -169,10 +170,14 @@ export function InputBar() {
     const parentId = modelPickerFor ?? selected?.id;
     if (!parentId) return;
     const text = draft.trim();
-    if (text) {
-      // Draft already written: branch right away.
-      branchFromNode(parentId, text, { model: choice });
+    if (text || files.length) {
+      // Draft (or attached file) already in the composer: branch right away.
+      branchFromNode(parentId, text, {
+        model: choice,
+        attachments: files.length ? files : undefined,
+      });
       setDraft("");
+      setFiles([]);
       setArmed(null);
     } else {
       // No prompt yet: arm the choice; the next submit branches with it.
@@ -288,10 +293,10 @@ export function InputBar() {
             disabled={!selected}
             onClick={() => {
               if (!selected) return;
-              // With a draft, branch immediately; with an empty composer, arm
-              // branch mode so the next message starts the new branch (same
-              // affordance as "Branch with model").
-              if (draft.trim()) submit("branch");
+              // With a draft (or an attached file), branch immediately; with
+              // an empty composer, arm branch mode so the next message starts
+              // the new branch (same affordance as "Branch with model").
+              if (draft.trim() || files.length) submit("branch");
               else setArmed({ parentId: selected.id });
             }}
           >

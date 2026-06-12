@@ -811,9 +811,9 @@ export const useChatStore = create<ChatStoreState>()(
 
         addUserMessage: (message, parentId, opts) => {
           const text = message.trim();
-          if (!text) return null;
-
           const files = opts?.attachments ?? [];
+          // Attachment-only sends are valid — the file is the message.
+          if (!text && files.length === 0) return null;
           let result: ExchangeResult | null = null;
           set((state) => {
             const chat = state.chats[state.activeChatId];
@@ -851,7 +851,8 @@ export const useChatStore = create<ChatStoreState>()(
 
         branchFromNode: (parentId, message, opts) => {
           const text = message.trim();
-          if (!text) return null;
+          // Attachment-only branches are valid too (file = the message).
+          if (!text && !opts?.attachments?.length) return null;
 
           let result: ExchangeResult | null = null;
           set((state) => {

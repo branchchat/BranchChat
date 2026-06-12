@@ -16,6 +16,26 @@ beforeEach(() => {
 });
 
 describe("attachments on messages", () => {
+  it("allows an attachment-only send (no typed text)", () => {
+    const result = useChatStore.getState().addUserMessage("", undefined, {
+      attachments: [FILE],
+    });
+    expect(result).not.toBeNull();
+    const chat =
+      useChatStore.getState().chats[useChatStore.getState().activeChatId];
+    const userNode = chat.nodes[result!.userId];
+    expect(userNode.content).toBe("");
+    expect(userNode.attachments?.[0]?.name).toBe("diagram.png");
+  });
+
+  it("still refuses a send with neither text nor attachments", () => {
+    expect(useChatStore.getState().addUserMessage("   ")).toBeNull();
+    const state = useChatStore.getState();
+    expect(
+      state.branchFromNode(state.chats[state.activeChatId].rootId, ""),
+    ).toBeNull();
+  });
+
   it("stamps metadata (not bytes) on the user node", () => {
     const result = useChatStore.getState().addUserMessage("what is this?", undefined, {
       attachments: [FILE],

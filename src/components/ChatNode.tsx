@@ -210,11 +210,14 @@ const ChatNodeBody = memo(function ChatNodeBody({
                       node.isError && "text-destructive",
                     )}
                   >
-                    {node.content || (
-                      <span className="text-muted-foreground italic">
-                        Empty
-                      </span>
-                    )}
+                    {node.content ||
+                      // Attachment-only message: the paperclip chips below
+                      // are the content; "Empty" would read like a bug.
+                      (!node.attachments?.length && (
+                        <span className="text-muted-foreground italic">
+                          Empty
+                        </span>
+                      ))}
                   </p>
                 )}
               </div>
