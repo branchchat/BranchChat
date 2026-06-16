@@ -44,6 +44,17 @@ def test_linked_blocks_are_labelled():
     assert "q" in s and "a" in s
 
 
+def test_system_instruction_carries_branchchat_creator_facts():
+    # The base policy must let any model answer "who made you / what is this"
+    # from real facts instead of disclaiming.
+    s = prompt.build_system_instruction(
+        coding_mode=False, personalization=None, linked_context=[]
+    )
+    assert "Roshaan Chaudhry" in s
+    assert "Jayden Tumboken" in s
+    assert "Stevens Institute of Technology" in s
+
+
 def test_system_instruction_composes_parts():
     blocks = [
         LinkedContextBlock(
