@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { Columns2, GitBranch, Link2 } from "lucide-react";
+import { Coins, Columns2, GitBranch, Link2, Sparkles } from "lucide-react";
 import { motion, useReducedMotion } from "motion/react";
 
 import { Brand } from "@/components/landing/Brand";
@@ -139,6 +139,49 @@ export function Landing() {
               </div>
             </Reveal>
           ))}
+        </div>
+      </section>
+
+      {/* ── Selective context: smarter + cheaper long chats ─────────────── */}
+      <section className="mx-auto max-w-5xl px-6 pb-16 sm:pb-24">
+        <Reveal className="mx-auto max-w-2xl text-center">
+          <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">
+            Long chats that stay sharp — and cheap
+          </h2>
+          <p className="mx-auto mt-3 max-w-lg text-muted-foreground">
+            Every reply sends the model only the branch you're on — not your
+            entire history.
+          </p>
+        </Reveal>
+        <div className="mt-10 grid gap-px overflow-hidden rounded-2xl border bg-border sm:grid-cols-2">
+          <Reveal>
+            <div className="h-full bg-background p-6 transition-colors hover:bg-secondary/40 sm:p-7">
+              <Sparkles className="size-5 text-foreground" strokeWidth={1.75} />
+              <h3 className="mt-4 text-sm font-semibold">
+                Smarter deep into a conversation
+              </h3>
+              <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
+                Dead ends and tangents stay on their own branches, out of
+                context. The model sees a clean line of reasoning instead of
+                everything you've ever tried — so answers stay on point long
+                after a linear chat would have drifted.
+              </p>
+            </div>
+          </Reveal>
+          <Reveal delay={0.08}>
+            <div className="h-full bg-background p-6 transition-colors hover:bg-secondary/40 sm:p-7">
+              <Coins className="size-5 text-foreground" strokeWidth={1.75} />
+              <h3 className="mt-4 text-sm font-semibold">
+                Tokens spent only where they count
+              </h3>
+              <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
+                Linear chats resend the whole transcript with every message.
+                Branches carry just their own path, so long explorations cost
+                less — and with your own API key, those savings land directly
+                on your bill.
+              </p>
+            </div>
+          </Reveal>
         </div>
       </section>
 
