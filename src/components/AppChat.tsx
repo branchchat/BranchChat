@@ -17,6 +17,7 @@ import { CompareView } from "@/components/CompareView"
 import { FeedbackButton } from "@/components/FeedbackButton"
 import { FocusView } from "@/components/FocusView"
 import { InputBar } from "@/components/InputBar"
+import { SettingsButton } from "@/components/SettingsButton"
 import { Toolbar } from "@/components/Toolbar"
 import { UsageMeter } from "@/components/UsageMeter"
 import { VerifyEmailBanner } from "@/components/VerifyEmailBanner"
@@ -71,6 +72,7 @@ export function AppChat() {
             Compare
           </Button>
           <FeedbackButton />
+          <SettingsButton />
           <UsageMeter />
           <AuthControls />
           <Link

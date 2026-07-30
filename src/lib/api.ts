@@ -139,6 +139,9 @@ export interface ModelInfo {
 export interface ProviderStatus {
   name: string;
   configured: boolean;
+  // True when `configured` holds because the signed-in user brought their own
+  // key (BYOK). Optional so an older backend still parses.
+  byok?: boolean;
 }
 
 export interface ModelsResponse {
@@ -418,6 +421,85 @@ export interface FeedbackPayload {
 // POST /api/feedback — throws ChatApiError on failure (surfacing the detail).
 export async function submitFeedback(payload: FeedbackPayload): Promise<void> {
   await postAuth<{ detail?: string }>("/api/feedback", payload);
+}
+
+// --- BYOK: the user's own provider API keys ---------------------------------
+// Keys are validated against the vendor at save time, sealed at rest, and only
+// ever come back as a last-four hint. Replies on a stored key skip the daily
+// quota (they spend the user's provider account). After any change here, call
+// clearModelsCache() — the catalog's provider availability is per-user now.
+
+export type ByokProvider = "gemini" | "openai" | "anthropic";
+
+export interface ApiKeyInfo {
+  provider: string;
+  key_hint: string;
+  created_at: string;
+}
+
+// GET /api/keys — the signed-in user's stored keys (hints only).
+export async function fetchApiKeys(signal?: AbortSignal): Promise<ApiKeyInfo[]> {
+  const res = await fetch(`${API_BASE}/api/keys`, {
+    credentials: "include",
+    signal,
+  });
+  if (!res.ok) {
+    throw new ChatApiError(`Request failed (HTTP ${res.status}).`, res.status);
+  }
+  const data = (await res.json()) as { keys?: ApiKeyInfo[] };
+  return data.keys ?? [];
+}
+
+// PUT /api/keys — validate + store (or replace) one provider key. Non-2xx
+// throws ChatApiError with the backend's user-facing detail (e.g. "That API
+// key was rejected by the provider…"). Returns the updated key list.
+export async function saveApiKey(
+  provider: ByokProvider,
+  apiKey: string,
+): Promise<ApiKeyInfo[]> {
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}/api/keys`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ provider, api_key: apiKey }),
+    });
+  } catch {
+    throw new ChatApiError(
+      "Could not reach the backend. Is it running and is VITE_API_BASE correct?",
+      0,
+    );
+  }
+  let data: unknown = null;
+  try {
+    data = await res.json();
+  } catch {
+    // Non-JSON body; handled below.
+  }
+  if (!res.ok) {
+    const detail = (data as { detail?: unknown } | null)?.detail;
+    throw new ChatApiError(
+      typeof detail === "string" && detail
+        ? detail
+        : `Request failed (HTTP ${res.status}).`,
+      res.status,
+    );
+  }
+  clearModelsCache();
+  return (data as { keys?: ApiKeyInfo[] }).keys ?? [];
+}
+
+// DELETE /api/keys/{provider} — remove the stored key.
+export async function deleteApiKey(provider: string): Promise<void> {
+  const res = await fetch(
+    `${API_BASE}/api/keys/${encodeURIComponent(provider)}`,
+    { method: "DELETE", credentials: "include" },
+  );
+  if (!res.ok) {
+    throw new ChatApiError(`Request failed (HTTP ${res.status}).`, res.status);
+  }
+  clearModelsCache();
 }
 
 // --- server-side sync (optional, signed-in users) ---------------------------
