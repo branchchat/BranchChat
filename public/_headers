@@ -5,4 +5,11 @@
   Permissions-Policy: camera=(), microphone=(), geolocation=(), browsing-topics=()
   Cross-Origin-Opener-Policy: same-origin
   Strict-Transport-Security: max-age=63072000; includeSubDomains
-  Content-Security-Policy: default-src 'self'; script-src 'self' https://t.branch-chat.com https://us-assets.i.posthog.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' https://api.branch-chat.com https://t.branch-chat.com https://us.i.posthog.com https://us-assets.i.posthog.com; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'sha256-x5hJpy/t44nj3+3vj1QZGgpMSId+Ebz1uI8o6tGvmzU=' https://t.branch-chat.com https://us-assets.i.posthog.com https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' https://api.branch-chat.com https://t.branch-chat.com https://us.i.posthog.com https://us-assets.i.posthog.com https://cloudflareinsights.com; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'
+
+# The sha256- hash in script-src allows index.html's inline theme-boot script
+# (the dark class must apply before first paint). If that script changes AT
+# ALL, regenerate the hash or dark mode silently breaks:
+#   python3 -c "import re,hashlib,base64;h=open('index.html').read();s=re.search(r'<script>(.*?)</script>',h,re.S).group(1);print('sha256-'+base64.b64encode(hashlib.sha256(s.encode()).digest()).decode())"
+# static.cloudflareinsights.com / cloudflareinsights.com cover the Web
+# Analytics beacon Cloudflare auto-injects (script + its POST endpoint).
