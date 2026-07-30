@@ -13,6 +13,7 @@ the app keeps working when some providers are unconfigured.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from typing import Literal, Mapping
 
@@ -320,9 +321,13 @@ def models_for_provider(provider: str) -> list[ModelInfo]:
     return [m for m in _CATALOG if m.provider == provider]
 
 
-def available_models() -> list[ModelInfo]:
-    """Models whose provider is configured on this server, catalog order."""
-    configured = set(providers.configured_provider_names())
+def available_models(extra_providers: Iterable[str] = ()) -> list[ModelInfo]:
+    """Models whose provider is configured on this server, catalog order.
+
+    ``extra_providers`` widens the set for one caller — the BYOK case, where
+    the user's own key makes a provider usable even without a house key.
+    """
+    configured = set(providers.configured_provider_names()) | set(extra_providers)
     return [m for m in _CATALOG if m.provider in configured]
 
 

@@ -29,6 +29,7 @@ from app.core.security_headers import (
 )
 from app.routers import (
     admin,
+    api_keys,
     auth,
     chat,
     feedback,
@@ -228,6 +229,7 @@ def create_app() -> FastAPI:
 
     app.include_router(health.router)
     app.include_router(admin.router)
+    app.include_router(api_keys.router)
     app.include_router(auth.router)
     app.include_router(chat.router)
     app.include_router(feedback.router)

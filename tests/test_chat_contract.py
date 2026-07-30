@@ -29,7 +29,7 @@ async def _noop_quota(session, **kwargs):
     return None
 
 
-async def _fake_generate(*, provider_name, req):
+async def _fake_generate(*, provider_name, req, api_key_override=None):
     return f"echo:{req.message}", req.model or f"{provider_name}-default"
 
 

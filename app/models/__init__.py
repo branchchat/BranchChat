@@ -11,6 +11,7 @@ from app.models.share import ShareSnapshot
 from app.models.synced_chat import SyncedChat
 from app.models.usage import UsageCounter
 from app.models.user import User
+from app.models.user_api_key import UserApiKey
 from app.models.waitlist import WaitlistEntry
 
 __all__ = [
@@ -21,5 +22,6 @@ __all__ = [
     "SyncedChat",
     "UsageCounter",
     "User",
+    "UserApiKey",
     "WaitlistEntry",
 ]

@@ -31,6 +31,7 @@ from app.schemas.chat import ChatRequest, ChatResponse
 from app.services import (
     analytics,
     auth_service,
+    byok_service,
     chat_service,
     model_catalog,
     usage_service,
@@ -120,6 +121,16 @@ async def chat(
     # Private beta: only approved accounts may reach the providers at all.
     await _require_beta_access(session, ctx)
 
+    # BYOK: a signed-in user with their own key for this provider runs on it
+    # and skips the daily quota entirely — the reply spends THEIR provider
+    # account, not our token budget. (Rate limits still apply above.)
+    byok_key: str | None = None
+    if ctx.user_id is not None and provider in byok_service.BYOK_PROVIDERS:
+        async with rls_tx(session, ctx.user_id):
+            byok_key = await byok_service.resolve_key(
+                session, user_id=ctx.user_id, provider=provider
+            )
+
     # High-cost models draw from the smaller premium bucket regardless of
     # coding mode — cost is the scarcer resource.
     if model_catalog.is_premium(provider, model_id):
@@ -129,19 +140,21 @@ async def chat(
     else:
         kind = "standard"
 
-    await _charge_quota(session, ctx, kind)
+    if byok_key is None:
+        await _charge_quota(session, ctx, kind)
     try:
         reply, model_used = await chat_service.generate_ai_response(
-            provider_name=provider, req=req
+            provider_name=provider, req=req, api_key_override=byok_key
         )
     except Exception:
         # Provider failed (e.g. a 5xx / not configured) — refund the charge so
         # the caller is only billed for a successful reply. A refund failure
         # must not mask the original provider error.
-        try:
-            await _refund_quota(session, ctx, kind)
-        except Exception:
-            pass
+        if byok_key is None:
+            try:
+                await _refund_quota(session, ctx, kind)
+            except Exception:
+                pass
         raise
     analytics.capture(
         ctx.distinct_id,
@@ -150,6 +163,7 @@ async def chat(
             "provider": provider,
             "model": model_used,
             "coding_mode": req.coding_mode,
+            "byok": byok_key is not None,
         },
     )
     return ChatResponse(

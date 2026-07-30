@@ -33,6 +33,9 @@ class ModelOut(BaseModel):
 class ProviderOut(BaseModel):
     name: str
     configured: bool
+    # True when `configured` holds because the SIGNED-IN caller brought their
+    # own key (BYOK) — additive so older frontends ignore it.
+    byok: bool = False
 
 
 class ModelsResponse(BaseModel):

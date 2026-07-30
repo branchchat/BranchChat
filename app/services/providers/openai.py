@@ -35,7 +35,8 @@ class OpenAIProvider(AIProvider):
         return bool(settings.OPENAI_API_KEY)
 
     async def generate(self, req: GenerationRequest) -> tuple[str, str]:
-        if not self.is_configured():
+        api_key = req.api_key_override or settings.OPENAI_API_KEY
+        if not api_key:
             raise ProviderNotConfiguredError()
 
         messages: list[dict] = [
@@ -74,9 +75,7 @@ class OpenAIProvider(AIProvider):
                 resp = await client.post(
                     f"{settings.OPENAI_BASE_URL}/v1/chat/completions",
                     json=body,
-                    headers={
-                        "Authorization": f"Bearer {settings.OPENAI_API_KEY}"
-                    },
+                    headers={"Authorization": f"Bearer {api_key}"},
                 )
         except httpx.TimeoutException as exc:
             raise ProviderUpstreamError(f"timeout: {exc}") from exc

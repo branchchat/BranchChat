@@ -83,9 +83,13 @@ def ensure_attachments_supported(
 
 
 async def generate_ai_response(
-    *, provider_name: str, req: ChatRequest
+    *, provider_name: str, req: ChatRequest, api_key_override: str | None = None
 ) -> tuple[str, str]:
     """Generate a reply for ``req`` via ``provider_name``.
+
+    ``api_key_override`` is the caller's own BYOK key: it replaces the server
+    env key for this request, so a provider with no house key still works for
+    users who brought their own.
 
     Returns ``(reply, model_id_used)``. Raises HTTPException with the API's
     stable error contract on any failure.
@@ -95,7 +99,11 @@ async def generate_ai_response(
     # Ollama is exempt from the is_configured gate here: it needs no key and
     # the legacy /api/chat/ollama route must keep working for local dev even
     # when it isn't advertised in /api/models (OLLAMA_ENABLED=false).
-    if provider.name != "ollama" and not provider.is_configured():
+    if (
+        provider.name != "ollama"
+        and not api_key_override
+        and not provider.is_configured()
+    ):
         raise HTTPException(
             status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="The AI provider is not configured.",
@@ -124,6 +132,7 @@ async def generate_ai_response(
             else settings.MAX_OUTPUT_TOKENS
         ),
         attachments=req.attachments,
+        api_key_override=api_key_override,
     )
 
     try:

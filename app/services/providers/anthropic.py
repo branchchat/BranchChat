@@ -37,7 +37,8 @@ class AnthropicProvider(AIProvider):
         return bool(settings.ANTHROPIC_API_KEY)
 
     async def generate(self, req: GenerationRequest) -> tuple[str, str]:
-        if not self.is_configured():
+        api_key = req.api_key_override or settings.ANTHROPIC_API_KEY
+        if not api_key:
             raise ProviderNotConfiguredError()
 
         # Merge AFTER appending the new message: a (crafted) history ending in
@@ -104,7 +105,7 @@ class AnthropicProvider(AIProvider):
                     f"{settings.ANTHROPIC_BASE_URL}/v1/messages",
                     json=body,
                     headers={
-                        "x-api-key": settings.ANTHROPIC_API_KEY or "",
+                        "x-api-key": api_key,
                         "anthropic-version": _API_VERSION,
                     },
                 )

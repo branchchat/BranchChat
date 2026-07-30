@@ -80,7 +80,11 @@ class GeminiProvider(AIProvider):
             resp = await client.post(
                 url,
                 json=body,
-                headers={"x-goog-api-key": settings.GEMINI_API_KEY or ""},
+                headers={
+                    "x-goog-api-key": req.api_key_override
+                    or settings.GEMINI_API_KEY
+                    or ""
+                },
             )
         except httpx.TimeoutException as exc:
             raise _UpstreamRetryable(f"timeout: {exc}") from exc

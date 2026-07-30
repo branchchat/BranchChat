@@ -61,6 +61,10 @@ class GenerationRequest:
     # first; the UI tells users an attachment applies to the message it's
     # sent with). Already validated/capped by the schema and service layer.
     attachments: list[Attachment] = field(default_factory=list)
+    # BYOK: the caller's own key for this provider. When set it replaces the
+    # server's env key for this one request (and satisfies the configured
+    # gate). Never logged, never echoed in errors — same rule as env keys.
+    api_key_override: str | None = None
 
 
 def merge_alternating(
