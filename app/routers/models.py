@@ -9,7 +9,10 @@ endpoints return, so model changes are backend-only deploys.
 
 from __future__ import annotations
 
+import logging
+
 from fastapi import APIRouter, Depends
+from sqlalchemy.exc import ProgrammingError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db, rls_tx
@@ -23,6 +26,8 @@ from app.schemas.models import (
     RecommendResponse,
 )
 from app.services import byok_service, model_catalog, model_recommender, providers
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/models", tags=["models"])
 
@@ -51,14 +56,22 @@ async def list_models(
 ) -> ModelsResponse:
     house = set(providers.configured_provider_names())
     # BYOK: the caller's own keys make those providers usable for them even
-    # without a house key, so the picker must include their models.
+    # without a house key, so the picker must include their models. A
+    # ProgrammingError means migration 0011 hasn't run yet — degrade to the
+    # house catalog so a code-first deploy can never break the picker.
     byok: set[str] = set()
     if ctx.user_id is not None:
-        async with rls_tx(session, ctx.user_id):
-            byok = set(
-                await byok_service.stored_providers(
-                    session, user_id=ctx.user_id
+        try:
+            async with rls_tx(session, ctx.user_id):
+                byok = set(
+                    await byok_service.stored_providers(
+                        session, user_id=ctx.user_id
+                    )
                 )
+        except ProgrammingError:
+            logger.warning(
+                "user_api_keys unavailable (migration 0011 not applied?); "
+                "serving house catalog only"
             )
     return ModelsResponse(
         models=[_to_model_out(m) for m in model_catalog.available_models(byok)],

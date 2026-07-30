@@ -21,7 +21,10 @@ buckets.
 
 from __future__ import annotations
 
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.exc import ProgrammingError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.rate_limit import ai_rate_limit
@@ -36,6 +39,8 @@ from app.services import (
     model_catalog,
     usage_service,
 )
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
 
@@ -124,11 +129,19 @@ async def chat(
     # BYOK: a signed-in user with their own key for this provider runs on it
     # and skips the daily quota entirely — the reply spends THEIR provider
     # account, not our token budget. (Rate limits still apply above.)
+    # A ProgrammingError means migration 0011 hasn't run yet — treat it as
+    # "no key" so a code-first deploy can never break chat.
     byok_key: str | None = None
     if ctx.user_id is not None and provider in byok_service.BYOK_PROVIDERS:
-        async with rls_tx(session, ctx.user_id):
-            byok_key = await byok_service.resolve_key(
-                session, user_id=ctx.user_id, provider=provider
+        try:
+            async with rls_tx(session, ctx.user_id):
+                byok_key = await byok_service.resolve_key(
+                    session, user_id=ctx.user_id, provider=provider
+                )
+        except ProgrammingError:
+            logger.warning(
+                "user_api_keys unavailable (migration 0011 not applied?); "
+                "continuing without BYOK"
             )
 
     # High-cost models draw from the smaller premium bucket regardless of
